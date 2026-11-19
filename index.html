@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>立体视界 · 裸眼3D图片工坊</title>
+<style>
+:root{
+  --bg:#0d0f14; --panel:#151922; --panel2:#1c2130; --line:#2a3142; --text:#e8ebf2; --mute:#8e97ab;
+  --accent:#5eead4; --accent2:#a78bfa; --warn:#fbbf24; --err:#f87171;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif}
+header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+header h1{margin:0;font-size:22px;letter-spacing:1px;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+header p{margin:0;color:var(--mute)}
+.wrap{display:grid;grid-template-columns:330px 1fr;gap:16px;padding:16px;max-width:1500px;margin:0 auto}
+@media (max-width:900px){.wrap{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+.card h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.step{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#06261f;font-size:12px;font-weight:700}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:22px 10px;text-align:center;color:var(--mute);cursor:pointer;transition:.2s}
+.drop:hover,.drop.over{border-color:var(--accent);color:var(--text);background:#5eead40d}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.row label{color:var(--mute);min-width:64px}
+button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit}
+button:hover{border-color:var(--accent)}
+button.primary{background:linear-gradient(90deg,#14b8a6,#8b5cf6);border:none;color:#fff;font-weight:600}
+button:disabled{opacity:.45;cursor:not-allowed}
+select,input[type=number]{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit}
+input[type=range]{flex:1;accent-color:var(--accent);min-width:120px}
+.val{width:42px;text-align:right;color:var(--accent);font-variant-numeric:tabular-nums}
+.hint{color:var(--mute);font-size:12.5px;margin:6px 0 0}
+.status{font-size:12.5px;color:var(--mute);min-height:20px;margin-top:6px}
+.status.ok{color:var(--accent)} .status.err{color:var(--err)} .status.warn{color:var(--warn)}
+.bar{height:6px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-top:6px;display:none}
+.bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .2s}
+#thumbs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+#thumbs figure{margin:0;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:4/3;display:grid;place-items:center;position:relative}
+#thumbs canvas{max-width:100%;max-height:100%;display:block}
+#thumbs figcaption{position:absolute;left:6px;top:4px;font-size:11px;color:#fff;text-shadow:0 0 3px #000}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tab{padding:8px 14px;border-radius:999px}
+.tab.on{background:var(--accent);color:#06261f;border-color:var(--accent);font-weight:600}
+.stage{background:#05060a;border:1px solid var(--line);border-radius:12px;min-height:420px;display:grid;place-items:center;overflow:hidden;position:relative;touch-action:none}
+.stage canvas{max-width:100%;max-height:72vh;display:block}
+.empty{color:var(--mute);text-align:center;padding:40px}
+.opts{display:none}.opts.on{display:block}
+.guide{background:var(--panel2);border-radius:10px;padding:10px 12px;color:#cfd5e2;font-size:13px;margin-top:10px}
+.guide b{color:var(--accent)}
+.chk{display:flex;align-items:center;gap:6px;color:var(--mute)}
+footer{color:var(--mute);text-align:center;font-size:12px;padding:20px}
+#overlay{position:fixed;inset:0;background:#000a;display:none;place-items:center;z-index:9}
+#overlay div{background:var(--panel);padding:20px 28px;border-radius:12px;border:1px solid var(--line)}
+</style>
+</head>
+<body>
+<header>
+  <h1>立体视界 · 裸眼3D图片工坊</h1>
+  <p>一张普通照片 → AI 估算深度 → 生成不用戴眼镜的立体图。全部在你的浏览器里完成，图片不会上传。</p>
+</header>
+
+<div class="wrap">
+<aside>
+  <div class="card">
+    <h2><span class="step">1</span>上传照片</h2>
+    <div class="drop" id="drop">点击选择或拖入图片<br><small>JPG / PNG / WebP，人像、宠物、风景都可以</small></div>
+    <input type="file" id="file" accept="image/*" hidden>
+    <div class="row"><button id="demoBtn">没有图片？用示例图</button>
+      <label style="min-width:auto">处理尺寸</label>
+      <select id="maxSize"><option value="1024">1024</option><option value="1600" selected>1600</option><option value="2048">2048</option></select>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="step">2</span>深度图（决定远近）</h2>
+    <div class="row">
+      <button class="primary" id="aiBtn" disabled>AI 生成深度</button>
+      <select id="hfSrc" title="模型下载源">
+        <option value="auto">自动选择下载源</option>
+        <option value="mirror">国内镜像 hf-mirror</option>
+        <option value="hf">Hugging Face 官方</option>
+      </select>
+    </div>
+    <div class="row">
+      <button id="quickBtn" disabled>快速估算（无需AI）</button>
+      <button id="depthUpBtn" disabled>上传深度图</button>
+      <input type="file" id="depthFile" accept="image/*" hidden>
+    </div>
+    <div class="bar" id="bar"><i></i></div>
+    <div class="status" id="depthStatus">首次使用 AI 需下载约 27MB 模型，之后会缓存。</div>
+    <div class="row"><label>边缘平滑</label><input type="range" id="smooth" min="0" max="12" step="0.5" value="2"><span class="val" id="smoothV">2</span></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="invert">反转远近</label></div>
+    <div id="thumbs">
+      <figure><canvas id="thumbImg"></canvas><figcaption>原图</figcaption></figure>
+      <figure><canvas id="thumbDepth"></canvas><figcaption>深度（白=近）</figcaption></figure>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="step">3</span>立体参数</h2>
+    <div class="row"><label>立体强度</label><input type="range" id="strength" min="0.5" max="8" step="0.1" value="3"><span class="val" id="strengthV">3</span></div>
+    <div class="row"><label>焦点平面</label><input type="range" id="focus" min="0" max="1" step="0.01" value="0.5"><span class="val" id="focusV">0.5</span></div>
+    <p class="hint">焦点平面上的物体不动；比它近的往前凸，比它远的往后退。拍人像时把焦点调到人物附近效果最好。</p>
+    <div class="row"><label class="chk"><input type="checkbox" id="autoCrop" checked>自动裁掉边缘拉伸</label></div>
+  </div>
+</aside>
+
+<main>
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-mode="parallax">🎞 动态3D照片</button>
+    <button class="tab" data-mode="wiggle">↔ 摇摆3D</button>
+    <button class="tab" data-mode="stereo">👀 交叉眼/平行眼</button>
+    <button class="tab" data-mode="magic">✨ 隐藏立体图</button>
+    <button class="tab" data-mode="anaglyph">🟥🟦 红蓝3D</button>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="empty" id="empty">先在左边上传一张照片（或点“用示例图”）</div>
+    <canvas id="gl" style="display:none"></canvas>
+    <canvas id="out" style="display:none"></canvas>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="opts on" data-for="parallax">
+      <div class="row"><label>运动方式</label>
+        <select id="motion">
+          <option value="circle">自动环绕</option>
+          <option value="swing">左右摇摆</option>
+          <option value="eight">8 字漂移</option>
+          <option value="pointer">跟随鼠标 / 手指</option>
+          <option value="gyro">手机陀螺仪</option>
+        </select>
+        <label style="min-width:auto">周期</label><input type="range" id="period" min="1.5" max="8" step="0.5" value="3.5"><span class="val" id="periodV">3.5s</span>
+      </div>
+      <div class="row">
+        <button class="primary" id="vidBtn" disabled>导出视频</button>
+        <select id="vidLoops"><option value="2">2 圈</option><option value="3" selected>3 圈</option><option value="5">5 圈</option></select>
+        <button id="gifBtn" disabled>导出 GIF</button>
+      </div>
+      <div class="guide">像 iPhone / Facebook 的“3D照片”：画面里的前景和背景以不同速度移动，产生强烈纵深感。<b>直接看就有立体感</b>，最适合发朋友圈、抖音。视频格式取决于浏览器（Chrome 新版为 MP4，否则为 WebM）。</div>
+    </div>
+
+    <div class="opts" data-for="wiggle">
+      <div class="row"><label>帧数</label>
+        <select id="wigFrames"><option value="2">2 帧（经典）</option><option value="3" selected>3 帧（更顺）</option><option value="5">5 帧（平滑）</option></select>
+        <label style="min-width:auto">速度</label><input type="range" id="wigSpeed" min="60" max="300" step="10" value="130"><span class="val" id="wigSpeedV">130ms</span>
+      </div>
+      <div class="row"><button class="primary" id="wigGifBtn" disabled>导出摇摆 GIF</button></div>
+      <div class="guide">“摇摆立体图（Wiggle Stereo）”：在几个视角之间快速来回切换，大脑会自动拼出立体感。<b>焦点平面一定要放在主体上</b>，这样主体不抖、只有前后景在晃。</div>
+    </div>
+
+    <div class="opts" data-for="stereo">
+      <div class="row"><label>看法</label>
+        <select id="stereoType"><option value="cross">交叉眼（斗鸡眼）</option><option value="parallel">平行眼（发呆眼）</option></select>
+        <label class="chk"><input type="checkbox" id="stereoSwap">左右互换</label>
+        <label class="chk"><input type="checkbox" id="stereoDots" checked>显示对齐点</label>
+      </div>
+      <div class="row"><button class="primary" id="stereoBtn" disabled>下载 PNG</button></div>
+      <div class="guide"><b>交叉眼看法：</b>把图放在一臂远，慢慢“对眼”，让两张图之间出现第三张；把上方两个圆点重合成一个，中间那张就是立体的。<br><b>平行眼看法：</b>像发呆一样看向屏幕后方，适合小尺寸（每张不超过 6 厘米）。</div>
+    </div>
+
+    <div class="opts" data-for="magic">
+      <div class="row"><label>花纹</label>
+        <select id="mePattern"><option value="dots">彩色随机点</option><option value="photo">照片纹理</option><option value="wave">彩虹波纹</option><option value="mono">黑白噪点</option></select>
+        <label style="min-width:auto">输出宽度</label>
+        <select id="meWidth"><option value="800">800</option><option value="1200" selected>1200</option><option value="1600">1600</option></select>
+      </div>
+      <div class="row"><label>条带数</label><input type="range" id="meStrips" min="5" max="14" step="1" value="8"><span class="val" id="meStripsV">8</span></div>
+      <div class="row"><label>凸起强度</label><input type="range" id="meDepth" min="0.08" max="0.45" step="0.01" value="0.28"><span class="val" id="meDepthV">0.28</span></div>
+      <div class="row"><label class="chk"><input type="checkbox" id="meInvert">凹凸反转（交叉眼用）</label>
+        <label class="chk"><input type="checkbox" id="meDots" checked>显示对齐点</label>
+        <button id="meRegen">换一组花纹</button></div>
+      <div class="row"><button class="primary" id="meBtn" disabled>下载 PNG</button></div>
+      <div class="guide">经典的“Magic Eye 隐藏立体图”：看起来是一片花纹，用<b>平行眼</b>（盯着屏幕后方）看，上方两个圆点变成三个时，照片的立体轮廓就会浮出来。细节会丢失，<b>轮廓清楚的主体（人、动物、物体）效果最好</b>。</div>
+    </div>
+
+    <div class="opts" data-for="anaglyph">
+      <div class="row"><label>颜色</label>
+        <select id="anaType"><option value="color">彩色</option><option value="half">半彩色（重影更少）</option><option value="gray">灰度</option></select>
+      </div>
+      <div class="row"><button class="primary" id="anaBtn" disabled>下载 PNG</button></div>
+      <div class="guide">附送模式：这个<b>需要红蓝眼镜</b>（左红右蓝），不算裸眼，但效果最稳定。</div>
+    </div>
+    <div class="status" id="exportStatus"></div>
+  </div>
+</main>
+</div>
+<footer>立体视界 · 深度模型 Depth Anything V2 (small) · 所有处理在本地浏览器完成</footer>
+<div id="overlay"><div id="overlayText">处理中…</div></div>
+
+<script type="module">
+const $ = s => document.querySelector(s);
+const TRANSFORMERS = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
+const GIFENC = 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js';
+const MODEL = 'onnx-community/depth-anything-v2-small';
+
+const S = { src:null, W:0, H:0, depthRaw:null, depth:null, mode:'parallax', ready:false,
+  pointer:[0,0], smoothPtr:[0,0], gyro:[0,0], recording:null, exporting:false, meSeed:1 };
+
+/* ---------- 工具 ---------- */
+const mk = (w,h) => { const c=document.createElement('canvas'); c.width=w; c.height=h; return c; };
+const tick = () => new Promise(r=>setTimeout(r,0));
+function download(blob, name){
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+function canvasBlob(c){ return new Promise(r=>c.toBlob(r,'image/png')); }
+function setStatus(el,msg,cls=''){ el.textContent=msg; el.className='status '+cls; }
+function overlay(msg){ const o=$('#overlay'); if(msg){ $('#overlayText').textContent=msg; o.style.display='grid'; } else o.style.display='none'; }
+function stamp(){ const d=new Date(); return `${d.getMonth()+1}${String(d.getDate()).padStart(2,'0')}-${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}`; }
+function param(id){ return parseFloat($('#'+id).value); }
+function drawThumb(id, src){ const c=$('#'+id); const s=Math.min(320/src.width, 240/src.height,1); c.width=Math.round(src.width*s); c.height=Math.round(src.height*s); c.getContext('2d').drawImage(src,0,0,c.width,c.height); }
+
+/* ---------- 载入图片 ---------- */
+async function loadImageFile(file){
+  const url=URL.createObjectURL(file);
+  const img=new Image(); img.src=url; await img.decode();
+  setSource(img); URL.revokeObjectURL(url);
+}
+function setSource(img){
+  const max=param('maxSize');
+  const s=Math.min(1, max/Math.max(img.width||img.naturalWidth, img.height||img.naturalHeight));
+  let W=Math.round((img.width||img.naturalWidth)*s), H=Math.round((img.height||img.naturalHeight)*s);
+  W-=W%2; H-=H%2;
+  const c=mk(W,H); c.getContext('2d').drawImage(img,0,0,W,H);
+  S.src=c; S.W=W; S.H=H; S.ready=true;
+  drawThumb('thumbImg', c);
+  ['aiBtn','quickBtn','depthUpBtn','vidBtn','gifBtn','wigGifBtn','stereoBtn','meBtn','anaBtn'].forEach(id=>$('#'+id).disabled=false);
+  $('#empty').style.display='none';
+  GL.setImage(c);
+  quickDepth();               // 先给一个即时结果
+  runAI();                    // 再自动跑 AI
+}
+
+$('#drop').onclick=()=>$('#file').click();
+$('#file').onchange=e=>{ if(e.target.files[0]) loadImageFile(e.target.files[0]); e.target.value=''; };
+['dragenter','dragover'].forEach(ev=>$('#drop').addEventListener(ev,e=>{e.preventDefault();$('#drop').classList.add('over');}));
+['dragleave','drop'].forEach(ev=>$('#drop').addEventListener(ev,e=>{e.preventDefault();$('#drop').classList.remove('over');}));
+$('#drop').addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f&&f.type.startsWith('image/')) loadImageFile(f); });
+window.addEventListener('paste',e=>{ const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/')); if(it) loadImageFile(it.getAsFile()); });
+
+/* ---------- 示例图（自带精确深度） ---------- */
+$('#demoBtn').onclick=()=>{
+  const W=1400,H=1000, c=mk(W,H), d=mk(W,H), x=c.getContext('2d'), y=d.getContext('2d');
+  let g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,'#1e3a8a'); g.addColorStop(.6,'#f472b6'); g.addColorStop(1,'#fde68a');
+  x.fillStyle=g; x.fillRect(0,0,W,H);
+  g=y.createLinearGradient(0,H*.55,0,H); g.addColorStop(0,'#000'); g.addColorStop(1,'#666'); y.fillStyle='#000'; y.fillRect(0,0,W,H); y.fillStyle=g; y.fillRect(0,H*.55,W,H*.45);
+  x.fillStyle='#0f766e'; x.beginPath(); x.moveTo(0,H*.6); for(let i=0;i<=W;i+=20) x.lineTo(i,H*.55+Math.sin(i/90)*40); x.lineTo(W,H); x.lineTo(0,H); x.fill();
+  x.fillStyle='#fff8'; for(let i=0;i<120;i++){ x.beginPath(); x.arc((i*137)%W,(i*71)%(H*.45),1.6,0,7); x.fill(); }
+  const balls=[[380,560,170,'#f59e0b',.55],[820,470,120,'#38bdf8',.4],[1050,700,210,'#a78bfa',.85],[560,820,110,'#34d399',.95]];
+  balls.sort((a,b)=>a[4]-b[4]);
+  for(const [cx,cy,r,col,z] of balls){
+    let rg=x.createRadialGradient(cx-r*.35,cy-r*.35,r*.1,cx,cy,r); rg.addColorStop(0,'#fff'); rg.addColorStop(.25,col); rg.addColorStop(1,'#111');
+    x.fillStyle=rg; x.beginPath(); x.arc(cx,cy,r,0,7); x.fill();
+    const lv=Math.round(z*200+30);
+    let dg=y.createRadialGradient(cx,cy,0,cx,cy,r); dg.addColorStop(0,`rgb(${lv+25},${lv+25},${lv+25})`); dg.addColorStop(1,`rgb(${lv},${lv},${lv})`);
+    y.fillStyle=dg; y.beginPath(); y.arc(cx,cy,r,0,7); y.fill();
+  }
+  x.font='bold 120px sans-serif'; x.fillStyle='#fff'; x.textAlign='center'; x.fillText('3D',1050,740);
+  setSourceNoAI(c, d);
+};
+function setSourceNoAI(c, depthCanvas){
+  const run=runAI; window.__skipAI=true; setSource(c); window.__skipAI=false;
+  const W=S.W,H=S.H, r=mk(W,H); r.getContext('2d').drawImage(depthCanvas,0,0,W,H);
+  setDepthRaw(r, '示例图已自带精确深度，可以直接看效果。', 'ok');
+}
+
+/* ---------- 深度 ---------- */
+function setDepthRaw(canvas, msg, cls){
+  S.depthRaw=canvas; rebuildDepth();
+  if(msg) setStatus($('#depthStatus'), msg, cls);
+}
+function rebuildDepth(){
+  if(!S.depthRaw) return;
+  const {W,H}=S, c=mk(W,H), x=c.getContext('2d');
+  const r=param('smooth'); $('#smoothV').textContent=r;
+  x.filter = r>0 ? `blur(${r*W/1000}px)` : 'none';
+  x.drawImage(S.depthRaw,0,0,W,H); x.filter='none';
+  if($('#invert').checked){ x.globalCompositeOperation='difference'; x.fillStyle='#fff'; x.fillRect(0,0,W,H); x.globalCompositeOperation='source-over'; }
+  S.depth=c; drawThumb('thumbDepth', c); GL.setDepth(c); refreshStatic();
+}
+$('#smooth').oninput=rebuildDepth; $('#invert').onchange=rebuildDepth;
+
+function quickDepth(){
+  const {W,H,src}=S, sw=Math.max(64,Math.round(W/4)), sh=Math.max(64,Math.round(H/4));
+  const s=mk(sw,sh), sx=s.getContext('2d'); sx.drawImage(src,0,0,sw,sh);
+  const id=sx.getImageData(0,0,sw,sh), p=id.data;
+  for(let y=0;y<sh;y++) for(let x=0;x<sw;x++){
+    const i=(y*sw+x)*4, lum=(p[i]*.3+p[i+1]*.59+p[i+2]*.11)/255;
+    const dx=(x/sw-.5)*2, dy=(y/sh-.45)*2, center=1-Math.min(1,Math.sqrt(dx*dx*.8+dy*dy));
+    const sat=(Math.max(p[i],p[i+1],p[i+2])-Math.min(p[i],p[i+1],p[i+2]))/255;
+    const v=Math.min(1,Math.max(0, .45*(y/sh)+.35*center+.1*lum+.1*sat));
+    p[i]=p[i+1]=p[i+2]=v*255; p[i+3]=255;
+  }
+  sx.putImageData(id,0,0);
+  const out=mk(W,H), ox=out.getContext('2d'); ox.filter=`blur(${W/80}px)`; ox.drawImage(s,0,0,W,H);
+  setDepthRaw(out, '已用快速估算生成深度（较粗略），建议用 AI 生成。', 'warn');
+}
+$('#quickBtn').onclick=quickDepth;
+
+$('#depthUpBtn').onclick=()=>$('#depthFile').click();
+$('#depthFile').onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return; e.target.value='';
+  const url=URL.createObjectURL(f), img=new Image(); img.src=url; await img.decode();
+  const c=mk(S.W,S.H), x=c.getContext('2d'); x.filter='grayscale(1)'; x.drawImage(img,0,0,S.W,S.H);
+  setDepthRaw(c,'已使用你上传的深度图（白色=近，黑色=远）。','ok');
+};
+
+let estimator=null, estimatorSrc=null, aiBusy=false;
+function preferMirror(){ try{ return /Shanghai|Chongqing|Harbin|Urumqi|Hong_Kong|Macau/.test(Intl.DateTimeFormat().resolvedOptions().timeZone) || /^zh-CN/i.test(navigator.language); }catch{ return false; } }
+async function loadEstimator(src){
+  const T=await import(TRANSFORMERS);
+  T.env.allowLocalModels=false;
+  T.env.remoteHost = src==='mirror' ? 'https://hf-mirror.com/' : 'https://huggingface.co/';
+  const files={}; const bar=$('#bar'), fill=bar.firstElementChild; bar.style.display='block';
+  const progress_callback=d=>{
+    if(d.status==='progress' && d.total){ files[d.file]=[d.loaded,d.total];
+      let l=0,t=0; for(const k in files){ l+=files[k][0]; t+=files[k][1]; }
+      fill.style.width=(l/t*100).toFixed(1)+'%';
+      setStatus($('#depthStatus'),`正在下载模型（${src==='mirror'?'国内镜像':'官方源'}）… ${(l/1048576).toFixed(1)} / ${(t/1048576).toFixed(1)} MB`);
+    }
+  };
+  let device='wasm', dtype='q8';
+  try{ if(navigator.gpu){ const a=await navigator.gpu.requestAdapter(); if(a){ device='webgpu'; dtype=a.features.has('shader-f16')?'fp16':'fp32'; } } }catch{}
+  try{ return await T.pipeline('depth-estimation', MODEL, {device, dtype, progress_callback}); }
+  catch(e){ if(device==='wasm') throw e; return await T.pipeline('depth-estimation', MODEL, {device:'wasm', dtype:'q8', progress_callback}); }
+}
+async function runAI(){
+  if(window.__skipAI || !S.ready || aiBusy) return;
+  aiBusy=true; $('#aiBtn').disabled=true;
+  const choice=$('#hfSrc').value;
+  const order = choice==='auto' ? (preferMirror()?['mirror','hf']:['hf','mirror']) : [choice];
+  try{
+    if(!estimator || (choice!=='auto' && estimatorSrc!==choice)){
+      let lastErr;
+      for(const src of order){
+        try{ setStatus($('#depthStatus'),`正在加载 AI 模型（${src==='mirror'?'国内镜像':'官方源'}）…`); estimator=await loadEstimator(src); estimatorSrc=src; lastErr=null; break; }
+        catch(e){ lastErr=e; console.warn(src,e); }
+      }
+      if(lastErr) throw lastErr;
+    }
+    setStatus($('#depthStatus'),'AI 正在分析远近关系…');
+    const blob=await canvasBlob(S.src), url=URL.createObjectURL(blob);
+    const t0=performance.now();
+    const out=await estimator(url); URL.revokeObjectURL(url);
+    const dep=out.depth, dw=dep.width, dh=dep.height, ch=dep.channels||1, data=dep.data;
+    const tmp=mk(dw,dh), tx=tmp.getContext('2d'), id=tx.createImageData(dw,dh);
+    for(let i=0;i<dw*dh;i++){ const v=data[i*ch]; id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v; id.data[i*4+3]=255; }
+    tx.putImageData(id,0,0);
+    const full=mk(S.W,S.H); full.getContext('2d').drawImage(tmp,0,0,S.W,S.H);
+    setDepthRaw(full, `AI 深度完成（${((performance.now()-t0)/1000).toFixed(1)} 秒）。`, 'ok');
+  }catch(e){
+    console.error(e);
+    setStatus($('#depthStatus'),'AI 模型加载失败：'+(e.message||e)+'。可切换下载源重试，或先用“快速估算”。','err');
+  }finally{ aiBusy=false; $('#aiBtn').disabled=false; $('#bar').style.display='none'; }
+}
+$('#aiBtn').onclick=runAI;
+
+/* ---------- WebGL 视差渲染器 ---------- */
+const GL = (()=>{
+  const cv=$('#gl'), gl=cv.getContext('webgl',{preserveDrawingBuffer:true, antialias:false});
+  if(!gl){ alertBox('你的浏览器不支持 WebGL，无法生成立体视图。'); return {setImage(){},setDepth(){},render(){}}; }
+  const vs=`attribute vec2 p; varying vec2 v; void main(){ v=vec2(p.x*.5+.5, .5-p.y*.5); gl_Position=vec4(p,0.,1.); }`;
+  const fs=`precision highp float;
+  uniform sampler2D img, dep; uniform vec2 off; uniform float focus, zoom; varying vec2 v;
+  void main(){
+    vec2 p = .5 + (v-.5)*zoom;
+    const int N = 56; float st = 1./float(N);
+    float prevH = 1.; vec2 s0 = p - off*(1.-focus); float prevD = texture2D(dep,s0).r;
+    vec2 hit = p - off*(0.-focus);
+    if(prevD >= 1.){ hit = s0; } else {
+      for(int i=1;i<=N;i++){
+        float h = 1. - float(i)*st;
+        vec2 s = p - off*(h-focus);
+        float d = texture2D(dep,s).r;
+        if(d >= h){
+          float a = prevD - prevH, b = d - h;
+          float t = a/(a-b+1e-5);
+          float hi = mix(prevH, h, clamp(t,0.,1.));
+          hit = p - off*(hi-focus);
+          break;
+        }
+        prevH = h; prevD = d;
+      }
+    }
+    gl_FragColor = texture2D(img, clamp(hit, vec2(0.), vec2(1.)));
+  }`;
+  const sh=(t,src)=>{ const s=gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; };
+  const pr=gl.createProgram(); gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs)); gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(pr); gl.useProgram(pr);
+  const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+  const loc=gl.getAttribLocation(pr,'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+  const U=n=>gl.getUniformLocation(pr,n), uOff=U('off'), uFocus=U('focus'), uZoom=U('zoom');
+  gl.uniform1i(U('img'),0); gl.uniform1i(U('dep'),1);
+  const mkTex=unit=>{ const t=gl.createTexture(); gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,t);
+    for(const [k,v] of [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D,k,v); return t; };
+  const tImg=mkTex(0), tDep=mkTex(1);
+  const up=(unit,t,c)=>{ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,t); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,c); };
+  return {
+    canvas:cv,
+    setImage(c){ cv.width=c.width; cv.height=c.height; gl.viewport(0,0,c.width,c.height); up(0,tImg,c); },
+    setDepth(c){ up(1,tDep,c); },
+    /* dx,dy ∈ [-1,1]：视点偏移；mul 放大倍数 */
+    render(dx,dy,mul=1){
+      const W=cv.width,H=cv.height, s=param('strength')/100*mul, f=param('focus');
+      const ox=dx*s, oy=dy*s*W/H;
+      let zoom=1;
+      if($('#autoCrop').checked){ const m=Math.max(f,1-f); zoom=1-2*Math.max(Math.abs(ox)*m, Math.abs(oy)*m)*1.02; zoom=Math.max(zoom,.7); }
+      gl.uniform2f(uOff,ox,oy); gl.uniform1f(uFocus,f); gl.uniform1f(uZoom,zoom);
+      gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+    },
+    snapshot(dx,dy,mul=1){ this.render(dx,dy,mul); const c=mk(cv.width,cv.height); c.getContext('2d').drawImage(cv,0,0); return c; }
+  };
+})();
+function alertBox(m){ setStatus($('#exportStatus'),m,'err'); }
+
+/* ---------- 实时动画 ---------- */
+function pathAt(t, kind){
+  const T=param('period'), a=2*Math.PI*t/T;
+  if(kind==='swing') return [Math.sin(a),0];
+  if(kind==='eight') return [Math.sin(a), Math.sin(2*a)*.45];
+  return [Math.cos(a), Math.sin(a)*.55];
+}
+const stage=$('#stage');
+stage.addEventListener('pointermove',e=>{ const r=GL.canvas.getBoundingClientRect(); if(!r.width) return;
+  S.pointer=[Math.max(-1,Math.min(1,((e.clientX-r.left)/r.width-.5)*2)), Math.max(-1,Math.min(1,((e.clientY-r.top)/r.height-.5)*2))]; });
+stage.addEventListener('pointerleave',()=>S.pointer=[0,0]);
+$('#motion').onchange=async()=>{
+  if($('#motion').value==='gyro'){
+    try{ if(typeof DeviceOrientationEvent!=='undefined' && DeviceOrientationEvent.requestPermission){ const r=await DeviceOrientationEvent.requestPermission(); if(r!=='granted') throw 0; } }
+    catch{ setStatus($('#exportStatus'),'没有获得陀螺仪权限。','warn'); }
+    window.addEventListener('deviceorientation',e=>{ S.gyro=[Math.max(-1,Math.min(1,(e.gamma||0)/25)), Math.max(-1,Math.min(1,((e.beta||0)-45)/25))]; });
+  }
+};
+$('#period').oninput=()=>$('#periodV').textContent=$('#period').value+'s';
+
+function loop(now){
+  requestAnimationFrame(loop);
+  if(!S.ready || S.exporting) return;
+  const t=now/1000;
+  if(S.mode==='parallax'){
+    let v;
+    if(S.recording){ v=pathAt((now-S.recording.t0)/1000, S.recording.kind); }
+    else {
+      const k=$('#motion').value;
+      if(k==='pointer'||k==='gyro'){ const tg=k==='pointer'?S.pointer:S.gyro; S.smoothPtr[0]+=(-tg[0]-S.smoothPtr[0])*.12; S.smoothPtr[1]+=(-tg[1]-S.smoothPtr[1])*.12; v=S.smoothPtr; }
+      else v=pathAt(t,k);
+    }
+    GL.render(v[0],v[1]);
+  } else if(S.mode==='wiggle'){
+    const seq=wiggleSeq(), i=Math.floor(now/param('wigSpeed'))%seq.length; GL.render(seq[i],0);
+  }
+}
+requestAnimationFrame(loop);
+function wiggleSeq(){ const n=+$('#wigFrames').value;
+  if(n===2) return [1,-1]; if(n===3) return [1,0,-1,0]; return [1,.5,0,-.5,-1,-.5,0,.5]; }
+$('#wigSpeed').oninput=()=>$('#wigSpeedV').textContent=$('#wigSpeed').value+'ms';
+
+/* ---------- 模式切换 ---------- */
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));
+  S.mode=b.dataset.mode;
+  document.querySelectorAll('.opts').forEach(o=>o.classList.toggle('on',o.dataset.for===S.mode));
+  refreshStatic();
+});
+function showCanvas(which){ if(!S.ready) return; GL.canvas.style.display=which==='gl'?'block':'none'; $('#out').style.display=which==='out'?'block':'none'; }
+
+let staticTimer=0;
+function refreshStatic(){
+  if(!S.ready) return;
+  if(S.mode==='parallax'||S.mode==='wiggle'){ showCanvas('gl'); return; }
+  clearTimeout(staticTimer); staticTimer=setTimeout(()=>{
+    const c = S.mode==='stereo'?buildStereo() : S.mode==='magic'?buildMagic() : buildAnaglyph();
+    const o=$('#out'); o.width=c.width; o.height=c.height; o.getContext('2d').drawImage(c,0,0); showCanvas('out');
+  },60);
+}
+['strength','focus','meStrips','meDepth'].forEach(id=>$('#'+id).addEventListener('input',()=>{ const v=$('#'+id+'V'); if(v) v.textContent=$('#'+id).value; refreshStatic(); }));
+['autoCrop','stereoType','stereoSwap','stereoDots','mePattern','meWidth','meInvert','meDots','anaType'].forEach(id=>$('#'+id).addEventListener('change',refreshStatic));
+$('#meRegen').onclick=()=>{ S.meSeed++; refreshStatic(); };
+
+/* ---------- 立体对 ---------- */
+function stereoViews(){ let L=GL.snapshot(.5,0), R=GL.snapshot(-.5,0); if($('#stereoSwap').checked) [L,R]=[R,L]; return [L,R]; }
+function buildStereo(){
+  const [L,R]=stereoViews(), W=L.width, H=L.height, gap=Math.round(W*.04), top=$('#stereoDots').checked?Math.round(H*.08):gap;
+  const c=mk(W*2+gap*3, H+top+gap), x=c.getContext('2d');
+  x.fillStyle='#000'; x.fillRect(0,0,c.width,c.height);
+  const cross=$('#stereoType').value==='cross', A=cross?R:L, B=cross?L:R;
+  x.drawImage(A,gap,top); x.drawImage(B,gap*2+W,top);
+  if($('#stereoDots').checked){ const r=Math.max(5,top*.18); x.fillStyle='#fff';
+    for(const cx of [gap+W/2, gap*2+W*1.5]){ x.beginPath(); x.arc(cx,top/2,r,0,7); x.fill(); } }
+  return c;
+}
+$('#stereoBtn').onclick=async()=>download(await canvasBlob(buildStereo()), `3D-${$('#stereoType').value==='cross'?'交叉眼':'平行眼'}-${stamp()}.png`);
+
+/* ---------- 红蓝 ---------- */
+function buildAnaglyph(){
+  const [L,R]=[GL.snapshot(.5,0),GL.snapshot(-.5,0)], W=L.width,H=L.height;
+  const ld=L.getContext('2d').getImageData(0,0,W,H), rd=R.getContext('2d').getImageData(0,0,W,H), a=ld.data,b=rd.data, t=$('#anaType').value;
+  for(let i=0;i<a.length;i+=4){
+    const lg=a[i]*.299+a[i+1]*.587+a[i+2]*.114;
+    if(t==='gray'){ const rg=b[i]*.299+b[i+1]*.587+b[i+2]*.114; a[i]=lg; a[i+1]=rg; a[i+2]=rg; }
+    else if(t==='half'){ a[i]=lg; a[i+1]=b[i+1]; a[i+2]=b[i+2]; }
+    else { a[i+1]=b[i+1]; a[i+2]=b[i+2]; }
+  }
+  L.getContext('2d').putImageData(ld,0,0); return L;
+}
+$('#anaBtn').onclick=async()=>download(await canvasBlob(buildAnaglyph()), `3D-红蓝-${stamp()}.png`);
+
+/* ---------- 隐藏立体图 (SIRDS) ---------- */
+function rng(seed){ let s=seed>>>0||1; return ()=>((s=Math.imul(s^(s>>>15),1|s)+0x6D2B79F5|0, (s>>>0)/4294967296)); }
+function makePattern(type,P){
+  const c=mk(P,P), x=c.getContext('2d'), r=rng(S.meSeed*9973+P);
+  if(type==='photo'){
+    const cw=Math.min(S.W,S.H)*.35, sx=r()*(S.W-cw), sy=r()*(S.H-cw);
+    x.drawImage(S.src,sx,sy,cw,cw,0,0,P,P);
+    x.globalAlpha=.35; for(let i=0;i<P*1.5;i++){ x.fillStyle=`hsl(${r()*360},80%,${40+r()*30}%)`; x.fillRect(r()*P,r()*P,2+r()*4,2+r()*4); } x.globalAlpha=1;
+    return c;
+  }
+  const id=x.createImageData(P,P), d=id.data, base=r()*360;
+  if(type==='wave'){
+    for(let y=0;y<P;y++) for(let i=0;i<P;i++){ const k=(y*P+i)*4;
+      const h=(base+Math.sin(i/P*Math.PI*2*3+y/P*Math.PI*2*2)*60+Math.cos(y/P*Math.PI*2*3)*60+r()*40)%360;
+      const [R,G,B]=hsl(h,.75,.45+r()*.2); d[k]=R; d[k+1]=G; d[k+2]=B; d[k+3]=255; }
+  } else {
+    const bs=Math.max(1,Math.round(P/90));
+    for(let y=0;y<P;y+=bs) for(let i=0;i<P;i+=bs){
+      let R,G,B; if(type==='mono'){ R=G=B=r()<.5?20:235; } else [R,G,B]=hsl((base+r()*140)%360,.8,.3+r()*.45);
+      for(let yy=y;yy<Math.min(P,y+bs);yy++) for(let xx=i;xx<Math.min(P,i+bs);xx++){ const k=(yy*P+xx)*4; d[k]=R; d[k+1]=G; d[k+2]=B; d[k+3]=255; } }
+  }
+  x.putImageData(id,0,0); return c;
+}
+function hsl(h,s,l){ h/=360; const f=n=>{ const k=(n+h*12)%12, a=s*Math.min(l,1-l); return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))); }; return [f(0),f(8),f(4)]; }
+function buildMagic(){
+  const W=Math.min(+$('#meWidth').value, Math.max(S.W,800)), H=Math.round(W*S.H/S.W);
+  const P=Math.round(W/param('meStrips')), maxShift=P*param('meDepth');
+  const dc=mk(W,H), dx=dc.getContext('2d'); dx.filter=`blur(${W/400}px)`; dx.drawImage(S.depth,0,0,W,H);
+  const dd=dx.getImageData(0,0,W,H).data;
+  const pat=makePattern($('#mePattern').value,P), pd=pat.getContext('2d').getImageData(0,0,P,P).data;
+  const top=$('#meDots').checked?Math.round(P*.45):0;
+  const out=mk(W,H+top), ox=out.getContext('2d'), od=ox.createImageData(W,H), o=od.data;
+  const inv=$('#meInvert').checked, same=new Int32Array(W), z=new Float32Array(W);
+  for(let y=0;y<H;y++){
+    for(let x=0;x<W;x++){ let v=dd[(y*W+x)*4]/255; z[x]=inv?1-v:v; same[x]=x; }
+    for(let x=0;x<W;x++){
+      const s=Math.round(P-z[x]*maxShift); let left=x-(s>>1), right=left+s;
+      if(left>=0 && right<W){
+        for(let k=same[left]; k!==left && k!==right; k=same[left]){ if(k<right) left=k; else { left=right; right=k; } }
+        same[left]=right;
+      }
+    }
+    for(let x=W-1;x>=0;x--){ const k=(y*W+x)*4;
+      if(same[x]===x){ const pk=((y%P)*P + (x%P))*4; o[k]=pd[pk]; o[k+1]=pd[pk+1]; o[k+2]=pd[pk+2]; }
+      else { const q=(y*W+same[x])*4; o[k]=o[q]; o[k+1]=o[q+1]; o[k+2]=o[q+2]; }
+      o[k+3]=255; }
+  }
+  ox.fillStyle='#fff'; ox.fillRect(0,0,W,top); ox.putImageData(od,0,top);
+  if(top){ ox.fillStyle='#111'; const r=top*.22; for(const cx of [W/2-P/2, W/2+P/2]){ ox.beginPath(); ox.arc(cx,top/2,r,0,7); ox.fill(); } }
+  return out;
+}
+$('#meBtn').onclick=async()=>download(await canvasBlob(buildMagic()), `3D-隐藏立体图-${stamp()}.png`);
+
+/* ---------- GIF 导出 ---------- */
+async function exportGif(frames, delay, name, maxW=640){
+  if(S.exporting) return; S.exporting=true; const st=$('#exportStatus');
+  try{
+    setStatus(st,'正在生成 GIF…'); overlay('正在生成 GIF…');
+    const {GIFEncoder, quantize, applyPalette}=await import(GIFENC);
+    const sc=Math.min(1,maxW/S.W), w=Math.round(S.W*sc), h=Math.round(S.H*sc), c=mk(w,h), x=c.getContext('2d',{willReadFrequently:true});
+    const gif=GIFEncoder();
+    for(let i=0;i<frames.length;i++){
+      GL.render(frames[i][0],frames[i][1]); x.drawImage(GL.canvas,0,0,w,h);
+      const {data}=x.getImageData(0,0,w,h), pal=quantize(data,256), idx=applyPalette(data,pal);
+      gif.writeFrame(idx,w,h,{palette:pal,delay}); overlay(`正在生成 GIF… ${i+1}/${frames.length}`); await tick();
+    }
+    gif.finish(); download(new Blob([gif.bytes()],{type:'image/gif'}), name);
+    setStatus(st,`GIF 已导出（${w}×${h}，${frames.length} 帧）。`,'ok');
+  }catch(e){ console.error(e); setStatus(st,'GIF 导出失败：'+e.message,'err'); }
+  finally{ S.exporting=false; overlay(); }
+}
+$('#gifBtn').onclick=()=>{
+  let k=$('#motion').value; if(k==='pointer'||k==='gyro') k='circle';
+  const n=36, T=param('period'); exportGif(Array.from({length:n},(_,i)=>pathAt(i/n*T,k)), Math.round(T*1000/n), `3D动态照片-${stamp()}.gif`);
+};
+$('#wigGifBtn').onclick=()=>exportGif(wiggleSeq().map(v=>[v,0]), param('wigSpeed'), `3D摇摆图-${stamp()}.gif`, 900);
+
+/* ---------- 视频导出 ---------- */
+$('#vidBtn').onclick=()=>{
+  if(S.recording) return; const st=$('#exportStatus');
+  if(!GL.canvas.captureStream || typeof MediaRecorder==='undefined'){ setStatus(st,'这个浏览器不支持录制视频，请用 Chrome / Edge，或导出 GIF。','err'); return; }
+  const types=['video/mp4;codecs=avc1.640028','video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'];
+  const mime=types.find(t=>MediaRecorder.isTypeSupported(t))||''; const ext=mime.includes('mp4')?'mp4':'webm';
+  let kind=$('#motion').value; if(kind==='pointer'||kind==='gyro') kind='circle';
+  const dur=param('period')*(+$('#vidLoops').value);
+  const stream=GL.canvas.captureStream(30), rec=new MediaRecorder(stream, mime?{mimeType:mime, videoBitsPerSecond:12e6}:{});
+  const chunks=[]; rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+  rec.onstop=()=>{ S.recording=null; $('#vidBtn').disabled=false; download(new Blob(chunks,{type:mime||'video/webm'}), `3D动态照片-${stamp()}.${ext}`); setStatus(st,`视频已导出（${ext.toUpperCase()}，${dur.toFixed(1)} 秒）。`,'ok'); };
+  S.recording={t0:performance.now(), kind}; $('#vidBtn').disabled=true; rec.start(250);
+  const t0=performance.now(); const iv=setInterval(()=>{ const p=(performance.now()-t0)/1000; setStatus(st,`正在录制视频… ${p.toFixed(1)} / ${dur.toFixed(1)} 秒（请保持页面在前台）`); if(p>=dur){ clearInterval(iv); rec.stop(); } },200);
+};
+
+/* 尺寸变更后重新载入 */
+$('#maxSize').onchange=()=>{ if(S.src) setStatus($('#depthStatus'),'处理尺寸对下一张图片生效。','warn'); };
+</script>
+</body>
+</html>

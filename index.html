@@ -14,8 +14,10 @@ html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 -apple-s
 header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
 header h1{margin:0;font-size:22px;letter-spacing:1px;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
 header p{margin:0;color:var(--mute)}
-.wrap{display:grid;grid-template-columns:330px 1fr;gap:16px;padding:16px;max-width:1500px;margin:0 auto}
-@media (max-width:900px){.wrap{grid-template-columns:1fr}}
+.wrap{display:grid;grid-template-columns:330px minmax(0,1fr);gap:16px;padding:16px;max-width:1500px;margin:0 auto}
+@media (max-width:900px){.wrap{grid-template-columns:minmax(0,1fr);padding:10px}}
+.wrap>aside,.wrap>main{min-width:0}
+html,body{overflow-x:hidden}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
 .card h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
 .step{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#06261f;font-size:12px;font-weight:700}
@@ -42,14 +44,20 @@ input[type=range]{flex:1;accent-color:var(--accent);min-width:120px}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .tab{padding:8px 14px;border-radius:999px}
 .tab.on{background:var(--accent);color:#06261f;border-color:var(--accent);font-weight:600}
-.stage{background:#05060a;border:1px solid var(--line);border-radius:12px;min-height:420px;display:grid;place-items:center;overflow:hidden;position:relative;touch-action:none}
-.stage canvas{max-width:100%;max-height:72vh;display:block}
+.stage{background:#05060a;border:1px solid var(--line);border-radius:12px;min-height:320px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;touch-action:none}
+.stage canvas{max-width:100%;max-height:72vh;width:auto;height:auto;display:block;flex:0 1 auto;min-width:0}
+details.diag{margin-top:10px;color:var(--mute);font-size:12px}
+details.diag pre{white-space:pre-wrap;word-break:break-all;background:#05060a;border:1px solid var(--line);border-radius:8px;padding:8px;max-height:240px;overflow:auto;color:#aab3c5}
 .empty{color:var(--mute);text-align:center;padding:40px}
 .opts{display:none}.opts.on{display:block}
 .guide{background:var(--panel2);border-radius:10px;padding:10px 12px;color:#cfd5e2;font-size:13px;margin-top:10px}
 .guide b{color:var(--accent)}
 .chk{display:flex;align-items:center;gap:6px;color:var(--mute)}
 footer{color:var(--mute);text-align:center;font-size:12px;padding:20px}
+#saveModal{position:fixed;inset:0;background:#000d;display:none;place-items:center;z-index:10;padding:16px}
+#saveModal .sm{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;max-width:96vw;text-align:center}
+#saveMedia img,#saveMedia video{max-width:100%;max-height:70vh;display:block;margin:0 auto;-webkit-touch-callout:default}
+#saveTip{color:var(--mute);font-size:13px}
 #overlay{position:fixed;inset:0;background:#000a;display:none;place-items:center;z-index:9}
 #overlay div{background:var(--panel);padding:20px 28px;border-radius:12px;border:1px solid var(--line)}
 </style>
@@ -183,66 +191,141 @@ footer{color:var(--mute);text-align:center;font-size:12px;padding:20px}
       <div class="guide">附送模式：这个<b>需要红蓝眼镜</b>（左红右蓝），不算裸眼，但效果最稳定。</div>
     </div>
     <div class="status" id="exportStatus"></div>
+    <details class="diag" id="diagBox"><summary>诊断信息（出问题时截图发给我）</summary><pre id="diag"></pre></details>
   </div>
 </main>
 </div>
 <footer>立体视界 · 深度模型 Depth Anything V2 (small) · 所有处理在本地浏览器完成</footer>
+<div id="saveModal"><div class="sm"><div id="saveMedia"></div><p id="saveTip"></p><div class="row" style="justify-content:center"><button class="primary" id="saveShare">保存 / 分享</button><button id="saveClose">关闭</button></div></div></div>
 <div id="overlay"><div id="overlayText">处理中…</div></div>
 
+<script>
+/* 最先运行：把错误显示在页面上，方便手机排查 */
+window.__log=function(){ try{ var el=document.getElementById('diag'); var t=new Date().toTimeString().slice(0,8)+' '+Array.prototype.join.call(arguments,' '); if(el){ el.textContent+=t+'\n'; } console.log(t); }catch(e){} };
+window.addEventListener('error',function(e){ __log('❌ 错误:', e.message, (e.filename||'').split('/').pop()+':'+e.lineno); var b=document.getElementById('diagBox'); if(b) b.open=true; });
+window.addEventListener('unhandledrejection',function(e){ __log('❌ 异步错误:', (e.reason&&(e.reason.message||e.reason))+''); var b=document.getElementById('diagBox'); if(b) b.open=true; });
+__log('UA:', navigator.userAgent);
+</script>
 <script type="module">
 const $ = s => document.querySelector(s);
+const log = (...a) => window.__log(...a);
 const TRANSFORMERS = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
 const GIFENC = 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js';
 const MODEL = 'onnx-community/depth-anything-v2-small';
+const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+const IS_MOBILE = IS_IOS || /Android|Mobile/i.test(navigator.userAgent);
+if(IS_MOBILE) $('#maxSize').value='1024';
+log('iOS:',IS_IOS,'移动端:',IS_MOBILE,'屏幕:',innerWidth+'x'+innerHeight,'DPR:',devicePixelRatio);
 
 const S = { src:null, W:0, H:0, depthRaw:null, depth:null, mode:'parallax', ready:false,
   pointer:[0,0], smoothPtr:[0,0], gyro:[0,0], recording:null, exporting:false, meSeed:1 };
 
 /* ---------- 工具 ---------- */
 const mk = (w,h) => { const c=document.createElement('canvas'); c.width=w; c.height=h; return c; };
+const free = c => { if(c){ c.width=0; c.height=0; } };   // Safari 画布内存有上限，用完立刻释放
+const ctx2d = c => { const x=c.getContext('2d',{willReadFrequently:true}); if(!x) throw new Error('无法创建画布（可能是手机内存不足，请把“处理尺寸”调小）'); return x; };
 const tick = () => new Promise(r=>setTimeout(r,0));
 function download(blob, name){
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  const url=URL.createObjectURL(blob);
+  if(IS_IOS){ showSaveModal(blob,name,url); return; }
+  const a=document.createElement('a'); a.href=url; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
-function canvasBlob(c){ return new Promise(r=>c.toBlob(r,'image/png')); }
+/* iPhone：在页面内显示结果，长按图片存相册，或点“保存/分享” */
+function showSaveModal(blob,name,url){
+  const m=$('#saveModal'), box=$('#saveMedia'); box.innerHTML='';
+  const el=blob.type.startsWith('video')?document.createElement('video'):document.createElement('img');
+  if(el.tagName==='VIDEO'){ el.controls=true; el.loop=true; el.muted=true; el.playsInline=true; el.autoplay=true; }
+  el.src=url; box.appendChild(el);
+  $('#saveTip').textContent = el.tagName==='VIDEO' ? '点“保存 / 分享”，选择“存储视频”即可存到相册。' : '长按图片选择“添加到照片”，或点“保存 / 分享”。';
+  $('#saveShare').onclick=async()=>{
+    try{ const f=new File([blob],name,{type:blob.type}); if(navigator.canShare&&navigator.canShare({files:[f]})) await navigator.share({files:[f]}); else { const a=document.createElement('a'); a.href=url; a.download=name; a.click(); } }
+    catch(e){ if(e.name!=='AbortError') log('分享失败:', e.message); }
+  };
+  $('#saveClose').onclick=()=>{ m.style.display='none'; box.innerHTML=''; URL.revokeObjectURL(url); };
+  m.style.display='grid'; setStatus($('#exportStatus'),'已生成：'+name,'ok');
+}
+function canvasBlob(c){ return new Promise((r,j)=>c.toBlob(b=>b?r(b):j(new Error('图片编码失败')),'image/png')); }
 function setStatus(el,msg,cls=''){ el.textContent=msg; el.className='status '+cls; }
 function overlay(msg){ const o=$('#overlay'); if(msg){ $('#overlayText').textContent=msg; o.style.display='grid'; } else o.style.display='none'; }
 function stamp(){ const d=new Date(); return `${d.getMonth()+1}${String(d.getDate()).padStart(2,'0')}-${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}`; }
 function param(id){ return parseFloat($('#'+id).value); }
-function drawThumb(id, src){ const c=$('#'+id); const s=Math.min(320/src.width, 240/src.height,1); c.width=Math.round(src.width*s); c.height=Math.round(src.height*s); c.getContext('2d').drawImage(src,0,0,c.width,c.height); }
+function drawThumb(id, src){ const c=$('#'+id); const s=Math.min(320/src.width, 240/src.height,1); c.width=Math.max(1,Math.round(src.width*s)); c.height=Math.max(1,Math.round(src.height*s)); ctx2d(c).drawImage(src,0,0,c.width,c.height); }
+
+/* 手写模糊（Safari 不支持 canvas 的 ctx.filter） */
+function boxPass(g,w,h,r,tmp){
+  for(let y=0;y<h;y++){ const o=y*w; let acc=0;
+    for(let i=-r;i<=r;i++) acc+=g[o+Math.min(w-1,Math.max(0,i))];
+    for(let x=0;x<w;x++){ tmp[o+x]=acc/(2*r+1); acc+=g[o+Math.min(w-1,x+r+1)]-g[o+Math.max(0,x-r)]; } }
+  for(let x=0;x<w;x++){ let acc=0;
+    for(let i=-r;i<=r;i++) acc+=tmp[Math.min(h-1,Math.max(0,i))*w+x];
+    for(let y=0;y<h;y++){ g[y*w+x]=acc/(2*r+1); acc+=tmp[Math.min(h-1,y+r+1)*w+x]-tmp[Math.max(0,y-r)*w+x]; } }
+}
+/* 把 src 转成灰度并模糊，输出 W×H 画布 */
+function grayBlur(src, W, H, r, invert=false){
+  const f=Math.max(1, r/2.5), w=Math.max(8,Math.round(W/f)), h=Math.max(8,Math.round(H/f));
+  const t=mk(w,h), tx=ctx2d(t); tx.drawImage(src,0,0,w,h);
+  const id=tx.getImageData(0,0,w,h), d=id.data, g=new Float32Array(w*h);
+  for(let i=0;i<w*h;i++) g[i]=d[i*4]*.299+d[i*4+1]*.587+d[i*4+2]*.114;
+  const rr=Math.round(r/f);
+  if(rr>=1){ const tmp=new Float32Array(w*h); for(let p=0;p<3;p++) boxPass(g,w,h,rr,tmp); }
+  for(let i=0;i<w*h;i++){ const v=invert?255-g[i]:g[i]; d[i*4]=d[i*4+1]=d[i*4+2]=v; d[i*4+3]=255; }
+  tx.putImageData(id,0,0);
+  const out=mk(W,H), ox=ctx2d(out); ox.imageSmoothingEnabled=true; ox.imageSmoothingQuality='high'; ox.drawImage(t,0,0,W,H); free(t);
+  return out;
+}
 
 /* ---------- 载入图片 ---------- */
+function decodeFile(file){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file), img=new Image();
+    img.onload=()=>res(img);
+    img.onerror=async()=>{ URL.revokeObjectURL(url);
+      try{ if(window.createImageBitmap) return res(await createImageBitmap(file)); }catch(e){}
+      rej(new Error('这张图片无法读取（如果是 HEIC 格式，请在相册里“复制”后改用 JPG，或截图后再上传）')); };
+    img.src=url;
+  });
+}
 async function loadImageFile(file){
-  const url=URL.createObjectURL(file);
-  const img=new Image(); img.src=url; await img.decode();
-  setSource(img); URL.revokeObjectURL(url);
+  try{
+    log('载入图片:', file.name, file.type||'(无类型)', (file.size/1048576).toFixed(1)+'MB');
+    setStatus($('#depthStatus'),'正在读取图片…');
+    const img=await decodeFile(file);
+    log('解码成功:', (img.naturalWidth||img.width)+'x'+(img.naturalHeight||img.height));
+    setSource(img);
+  }catch(e){ log('❌ 载入失败:', e.message); setStatus($('#depthStatus'), e.message, 'err'); }
 }
 function setSource(img){
-  const max=param('maxSize');
-  const s=Math.min(1, max/Math.max(img.width||img.naturalWidth, img.height||img.naturalHeight));
-  let W=Math.round((img.width||img.naturalWidth)*s), H=Math.round((img.height||img.naturalHeight)*s);
-  W-=W%2; H-=H%2;
-  const c=mk(W,H); c.getContext('2d').drawImage(img,0,0,W,H);
-  S.src=c; S.W=W; S.H=H; S.ready=true;
+  const iw=img.naturalWidth||img.width, ih=img.naturalHeight||img.height;
+  const max=param('maxSize'), s=Math.min(1, max/Math.max(iw,ih));
+  let W=Math.round(iw*s), H=Math.round(ih*s); W-=W%2; H-=H%2;
+  free(S.src); free(S.depthRaw); free(S.depth);
+  const c=mk(W,H); ctx2d(c).drawImage(img,0,0,W,H);
+  S.src=c; S.W=W; S.H=H; S.ready=true; S.depth=null; S.depthRaw=null;
+  log('处理尺寸:', W+'x'+H);
   drawThumb('thumbImg', c);
   ['aiBtn','quickBtn','depthUpBtn','vidBtn','gifBtn','wigGifBtn','stereoBtn','meBtn','anaBtn'].forEach(id=>$('#'+id).disabled=false);
   $('#empty').style.display='none';
+  showFallback();             // 先把原图显示出来
   GL.setImage(c);
-  quickDepth();               // 先给一个即时结果
-  runAI();                    // 再自动跑 AI
+  if(!window.__skipAI){ quickDepth(); runAI(); }
+  if(IS_MOBILE) setTimeout(()=>$('#tabs').scrollIntoView({behavior:'smooth',block:'start'}),300);
+}
+/* 任何时候都先能看到图：把原图画到 #out 上 */
+function showFallback(){
+  const o=$('#out'); o.width=S.W; o.height=S.H; ctx2d(o).drawImage(S.src,0,0); showCanvas('out');
 }
 
 $('#drop').onclick=()=>$('#file').click();
-$('#file').onchange=e=>{ if(e.target.files[0]) loadImageFile(e.target.files[0]); e.target.value=''; };
+$('#file').onchange=e=>{ const f=e.target.files[0]; if(f) loadImageFile(f); e.target.value=''; };
 ['dragenter','dragover'].forEach(ev=>$('#drop').addEventListener(ev,e=>{e.preventDefault();$('#drop').classList.add('over');}));
 ['dragleave','drop'].forEach(ev=>$('#drop').addEventListener(ev,e=>{e.preventDefault();$('#drop').classList.remove('over');}));
 $('#drop').addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f&&f.type.startsWith('image/')) loadImageFile(f); });
-window.addEventListener('paste',e=>{ const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/')); if(it) loadImageFile(it.getAsFile()); });
+window.addEventListener('paste',e=>{ const it=[...((e.clipboardData&&e.clipboardData.items)||[])].find(i=>i.type.startsWith('image/')); if(it) loadImageFile(it.getAsFile()); });
 
 /* ---------- 示例图（自带精确深度） ---------- */
 $('#demoBtn').onclick=()=>{
-  const W=1400,H=1000, c=mk(W,H), d=mk(W,H), x=c.getContext('2d'), y=d.getContext('2d');
+  const W=1400,H=1000, c=mk(W,H), d=mk(W,H), x=ctx2d(c), y=ctx2d(d);
   let g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,'#1e3a8a'); g.addColorStop(.6,'#f472b6'); g.addColorStop(1,'#fde68a');
   x.fillStyle=g; x.fillRect(0,0,W,H);
   g=y.createLinearGradient(0,H*.55,0,H); g.addColorStop(0,'#000'); g.addColorStop(1,'#666'); y.fillStyle='#000'; y.fillRect(0,0,W,H); y.fillStyle=g; y.fillRect(0,H*.55,W,H*.45);
@@ -258,33 +341,30 @@ $('#demoBtn').onclick=()=>{
     y.fillStyle=dg; y.beginPath(); y.arc(cx,cy,r,0,7); y.fill();
   }
   x.font='bold 120px sans-serif'; x.fillStyle='#fff'; x.textAlign='center'; x.fillText('3D',1050,740);
-  setSourceNoAI(c, d);
-};
-function setSourceNoAI(c, depthCanvas){
-  const run=runAI; window.__skipAI=true; setSource(c); window.__skipAI=false;
-  const W=S.W,H=S.H, r=mk(W,H); r.getContext('2d').drawImage(depthCanvas,0,0,W,H);
+  window.__skipAI=true; setSource(c); window.__skipAI=false;
+  const r=mk(S.W,S.H); ctx2d(r).drawImage(d,0,0,S.W,S.H); free(c); free(d);
   setDepthRaw(r, '示例图已自带精确深度，可以直接看效果。', 'ok');
-}
+};
 
 /* ---------- 深度 ---------- */
 function setDepthRaw(canvas, msg, cls){
+  if(S.depthRaw && S.depthRaw!==canvas) free(S.depthRaw);
   S.depthRaw=canvas; rebuildDepth();
   if(msg) setStatus($('#depthStatus'), msg, cls);
 }
 function rebuildDepth(){
   if(!S.depthRaw) return;
-  const {W,H}=S, c=mk(W,H), x=c.getContext('2d');
-  const r=param('smooth'); $('#smoothV').textContent=r;
-  x.filter = r>0 ? `blur(${r*W/1000}px)` : 'none';
-  x.drawImage(S.depthRaw,0,0,W,H); x.filter='none';
-  if($('#invert').checked){ x.globalCompositeOperation='difference'; x.fillStyle='#fff'; x.fillRect(0,0,W,H); x.globalCompositeOperation='source-over'; }
-  S.depth=c; drawThumb('thumbDepth', c); GL.setDepth(c); refreshStatic();
+  try{
+    const r=param('smooth'); $('#smoothV').textContent=r;
+    const c=grayBlur(S.depthRaw, S.W, S.H, r*S.W/1000, $('#invert').checked);
+    free(S.depth); S.depth=c; drawThumb('thumbDepth', c); GL.setDepth(c); refreshStatic();
+  }catch(e){ log('❌ 深度处理失败:', e.message); setStatus($('#depthStatus'),e.message,'err'); }
 }
 $('#smooth').oninput=rebuildDepth; $('#invert').onchange=rebuildDepth;
 
 function quickDepth(){
   const {W,H,src}=S, sw=Math.max(64,Math.round(W/4)), sh=Math.max(64,Math.round(H/4));
-  const s=mk(sw,sh), sx=s.getContext('2d'); sx.drawImage(src,0,0,sw,sh);
+  const s=mk(sw,sh), sx=ctx2d(s); sx.drawImage(src,0,0,sw,sh);
   const id=sx.getImageData(0,0,sw,sh), p=id.data;
   for(let y=0;y<sh;y++) for(let x=0;x<sw;x++){
     const i=(y*sw+x)*4, lum=(p[i]*.3+p[i+1]*.59+p[i+2]*.11)/255;
@@ -294,21 +374,21 @@ function quickDepth(){
     p[i]=p[i+1]=p[i+2]=v*255; p[i+3]=255;
   }
   sx.putImageData(id,0,0);
-  const out=mk(W,H), ox=out.getContext('2d'); ox.filter=`blur(${W/80}px)`; ox.drawImage(s,0,0,W,H);
-  setDepthRaw(out, '已用快速估算生成深度（较粗略），建议用 AI 生成。', 'warn');
+  const out=grayBlur(s, W, H, W/80); free(s);
+  setDepthRaw(out, '已用快速估算生成深度（较粗略），AI 深度正在后台生成…', 'warn');
 }
-$('#quickBtn').onclick=quickDepth;
+$('#quickBtn').onclick=()=>{ quickDepth(); setStatus($('#depthStatus'),'已用快速估算生成深度（较粗略）。','warn'); };
 
 $('#depthUpBtn').onclick=()=>$('#depthFile').click();
 $('#depthFile').onchange=async e=>{
   const f=e.target.files[0]; if(!f) return; e.target.value='';
-  const url=URL.createObjectURL(f), img=new Image(); img.src=url; await img.decode();
-  const c=mk(S.W,S.H), x=c.getContext('2d'); x.filter='grayscale(1)'; x.drawImage(img,0,0,S.W,S.H);
-  setDepthRaw(c,'已使用你上传的深度图（白色=近，黑色=远）。','ok');
+  try{ const img=await decodeFile(f); const c=mk(S.W,S.H); ctx2d(c).drawImage(img,0,0,S.W,S.H);
+    setDepthRaw(c,'已使用你上传的深度图（白色=近，黑色=远）。','ok'); }
+  catch(err){ setStatus($('#depthStatus'),err.message,'err'); }
 };
 
 let estimator=null, estimatorSrc=null, aiBusy=false;
-function preferMirror(){ try{ return /Shanghai|Chongqing|Harbin|Urumqi|Hong_Kong|Macau/.test(Intl.DateTimeFormat().resolvedOptions().timeZone) || /^zh-CN/i.test(navigator.language); }catch{ return false; } }
+function preferMirror(){ try{ return /Shanghai|Chongqing|Harbin|Urumqi|Hong_Kong|Macau/.test(Intl.DateTimeFormat().resolvedOptions().timeZone) || /^zh-CN/i.test(navigator.language); }catch(e){ return false; } }
 async function loadEstimator(src){
   const T=await import(TRANSFORMERS);
   T.env.allowLocalModels=false;
@@ -322,12 +402,14 @@ async function loadEstimator(src){
     }
   };
   let device='wasm', dtype='q8';
-  try{ if(navigator.gpu){ const a=await navigator.gpu.requestAdapter(); if(a){ device='webgpu'; dtype=a.features.has('shader-f16')?'fp16':'fp32'; } } }catch{}
+  // iPhone 上的 WebGPU 跑这个模型不稳定、容易把页面撑崩，手机一律用 wasm
+  if(!IS_MOBILE){ try{ if(navigator.gpu){ const a=await navigator.gpu.requestAdapter(); if(a){ device='webgpu'; dtype=a.features.has('shader-f16')?'fp16':'fp32'; } } }catch(e){} }
+  log('AI 设备:', device, dtype, '源:', src);
   try{ return await T.pipeline('depth-estimation', MODEL, {device, dtype, progress_callback}); }
-  catch(e){ if(device==='wasm') throw e; return await T.pipeline('depth-estimation', MODEL, {device:'wasm', dtype:'q8', progress_callback}); }
+  catch(e){ if(device==='wasm') throw e; log('WebGPU 失败，改用 wasm:', e.message); return await T.pipeline('depth-estimation', MODEL, {device:'wasm', dtype:'q8', progress_callback}); }
 }
 async function runAI(){
-  if(window.__skipAI || !S.ready || aiBusy) return;
+  if(!S.ready || aiBusy) return;
   aiBusy=true; $('#aiBtn').disabled=true;
   const choice=$('#hfSrc').value;
   const order = choice==='auto' ? (preferMirror()?['mirror','hf']:['hf','mirror']) : [choice];
@@ -336,72 +418,92 @@ async function runAI(){
       let lastErr;
       for(const src of order){
         try{ setStatus($('#depthStatus'),`正在加载 AI 模型（${src==='mirror'?'国内镜像':'官方源'}）…`); estimator=await loadEstimator(src); estimatorSrc=src; lastErr=null; break; }
-        catch(e){ lastErr=e; console.warn(src,e); }
+        catch(e){ lastErr=e; log('模型源失败', src, e.message||e); }
       }
       if(lastErr) throw lastErr;
     }
     setStatus($('#depthStatus'),'AI 正在分析远近关系…');
-    const blob=await canvasBlob(S.src), url=URL.createObjectURL(blob);
+    // 模型内部只用 518px，先缩小再送进去，省内存
+    const s=Math.min(1, 720/Math.max(S.W,S.H)), sw=Math.round(S.W*s), sh=Math.round(S.H*s);
+    const small=mk(sw,sh); ctx2d(small).drawImage(S.src,0,0,sw,sh);
+    const blob=await canvasBlob(small); free(small); const url=URL.createObjectURL(blob);
     const t0=performance.now();
     const out=await estimator(url); URL.revokeObjectURL(url);
     const dep=out.depth, dw=dep.width, dh=dep.height, ch=dep.channels||1, data=dep.data;
-    const tmp=mk(dw,dh), tx=tmp.getContext('2d'), id=tx.createImageData(dw,dh);
+    const tmp=mk(dw,dh), tx=ctx2d(tmp), id=tx.createImageData(dw,dh);
     for(let i=0;i<dw*dh;i++){ const v=data[i*ch]; id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v; id.data[i*4+3]=255; }
     tx.putImageData(id,0,0);
-    const full=mk(S.W,S.H); full.getContext('2d').drawImage(tmp,0,0,S.W,S.H);
+    const full=mk(S.W,S.H); ctx2d(full).drawImage(tmp,0,0,S.W,S.H); free(tmp);
+    log('AI 深度完成', dw+'x'+dh, ((performance.now()-t0)/1000).toFixed(1)+'s');
     setDepthRaw(full, `AI 深度完成（${((performance.now()-t0)/1000).toFixed(1)} 秒）。`, 'ok');
   }catch(e){
-    console.error(e);
-    setStatus($('#depthStatus'),'AI 模型加载失败：'+(e.message||e)+'。可切换下载源重试，或先用“快速估算”。','err');
+    log('❌ AI 失败:', e.message||e);
+    setStatus($('#depthStatus'),'AI 模型加载失败：'+(e.message||e)+'。当前用的是快速估算深度，可切换下载源重试。','err');
   }finally{ aiBusy=false; $('#aiBtn').disabled=false; $('#bar').style.display='none'; }
 }
 $('#aiBtn').onclick=runAI;
 
 /* ---------- WebGL 视差渲染器 ---------- */
 const GL = (()=>{
-  const cv=$('#gl'), gl=cv.getContext('webgl',{preserveDrawingBuffer:true, antialias:false});
-  if(!gl){ alertBox('你的浏览器不支持 WebGL，无法生成立体视图。'); return {setImage(){},setDepth(){},render(){}}; }
+  const cv=$('#gl'); let gl=null, ok=false, uOff, uFocus, uZoom, tImg, tDep;
   const vs=`attribute vec2 p; varying vec2 v; void main(){ v=vec2(p.x*.5+.5, .5-p.y*.5); gl_Position=vec4(p,0.,1.); }`;
+  // 不在循环里 break，所有纹理采样都在统一控制流中（iOS 的 Metal 后端对此更稳）
   const fs=`precision highp float;
   uniform sampler2D img, dep; uniform vec2 off; uniform float focus, zoom; varying vec2 v;
   void main(){
     vec2 p = .5 + (v-.5)*zoom;
-    const int N = 56; float st = 1./float(N);
-    float prevH = 1.; vec2 s0 = p - off*(1.-focus); float prevD = texture2D(dep,s0).r;
-    vec2 hit = p - off*(0.-focus);
-    if(prevD >= 1.){ hit = s0; } else {
-      for(int i=1;i<=N;i++){
-        float h = 1. - float(i)*st;
-        vec2 s = p - off*(h-focus);
-        float d = texture2D(dep,s).r;
-        if(d >= h){
-          float a = prevD - prevH, b = d - h;
-          float t = a/(a-b+1e-5);
-          float hi = mix(prevH, h, clamp(t,0.,1.));
-          hit = p - off*(hi-focus);
-          break;
-        }
-        prevH = h; prevD = d;
-      }
+    float st = 1./48.;
+    float prevH = 1.; float prevD = texture2D(dep, p - off*(1.-focus)).r;
+    float found = prevD >= 1. ? 1. : 0.;
+    float hitH = found > .5 ? 1. : 0.;
+    for(int i=1;i<=48;i++){
+      float h = 1. - float(i)*st;
+      float d = texture2D(dep, p - off*(h-focus)).r;
+      float isHit = (found < .5 && d >= h) ? 1. : 0.;
+      float a = prevD - prevH, b = d - h;
+      float t = clamp(a/(a-b-1e-5), 0., 1.);
+      hitH = mix(hitH, mix(prevH, h, t), isHit);
+      found = max(found, isHit);
+      prevH = h; prevD = d;
     }
-    gl_FragColor = texture2D(img, clamp(hit, vec2(0.), vec2(1.)));
+    vec2 hit = p - off*(hitH-focus);
+    gl_FragColor = vec4(texture2D(img, clamp(hit, vec2(0.), vec2(1.))).rgb, 1.);
   }`;
-  const sh=(t,src)=>{ const s=gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; };
-  const pr=gl.createProgram(); gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs)); gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(pr); gl.useProgram(pr);
-  const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
-  const loc=gl.getAttribLocation(pr,'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
-  const U=n=>gl.getUniformLocation(pr,n), uOff=U('off'), uFocus=U('focus'), uZoom=U('zoom');
-  gl.uniform1i(U('img'),0); gl.uniform1i(U('dep'),1);
-  const mkTex=unit=>{ const t=gl.createTexture(); gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,t);
-    for(const [k,v] of [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D,k,v); return t; };
-  const tImg=mkTex(0), tDep=mkTex(1);
+  function init(){
+    ok=false;
+    gl=cv.getContext('webgl',{preserveDrawingBuffer:true, antialias:false, premultipliedAlpha:false}) || cv.getContext('experimental-webgl');
+    if(!gl){ log('❌ WebGL 不可用'); return; }
+    const sh=(t,src)=>{ const s=gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error('着色器编译失败: '+gl.getShaderInfoLog(s)); return s; };
+    try{
+      const pr=gl.createProgram(); gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs)); gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(pr);
+      if(!gl.getProgramParameter(pr,gl.LINK_STATUS)) throw new Error('着色器链接失败: '+gl.getProgramInfoLog(pr));
+      gl.useProgram(pr);
+      const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+      const loc=gl.getAttribLocation(pr,'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+      const U=n=>gl.getUniformLocation(pr,n); uOff=U('off'); uFocus=U('focus'); uZoom=U('zoom');
+      gl.uniform1i(U('img'),0); gl.uniform1i(U('dep'),1);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false); gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL,gl.NONE);
+      const mkTex=unit=>{ const t=gl.createTexture(); gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,t);
+        gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([0,0,0,255]));
+        for(const [k,v] of [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D,k,v); return t; };
+      tImg=mkTex(0); tDep=mkTex(1); ok=true;
+      log('WebGL 就绪, 最大纹理:', gl.getParameter(gl.MAX_TEXTURE_SIZE));
+    }catch(e){ log('❌', e.message); }
+  }
+  cv.addEventListener('webglcontextlost',e=>{ e.preventDefault(); ok=false; log('⚠️ WebGL 上下文丢失'); showFallback(); });
+  cv.addEventListener('webglcontextrestored',()=>{ log('WebGL 已恢复'); init(); if(S.src){ api.setImage(S.src); if(S.depth) api.setDepth(S.depth); refreshStatic(); } });
   const up=(unit,t,c)=>{ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,t); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,c); };
-  return {
-    canvas:cv,
-    setImage(c){ cv.width=c.width; cv.height=c.height; gl.viewport(0,0,c.width,c.height); up(0,tImg,c); },
-    setDepth(c){ up(1,tDep,c); },
-    /* dx,dy ∈ [-1,1]：视点偏移；mul 放大倍数 */
+  init();
+  const api={
+    canvas:cv, get ok(){ return ok; },
+    setImage(c){ if(!ok) return; cv.width=c.width; cv.height=c.height; gl.viewport(0,0,c.width,c.height); up(0,tImg,c); },
+    setDepth(c){ if(!ok) return; up(1,tDep,c);
+      // 自检：渲染一帧并读回像素，确认真的画出东西
+      this.render(0,0); const px=new Uint8Array(4); gl.readPixels(cv.width>>1,cv.height>>1,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);
+      const e=gl.getError(); log('GL 自检像素:', px.join(','), e?'glError='+e:'');
+    },
     render(dx,dy,mul=1){
+      if(!ok) return;
       const W=cv.width,H=cv.height, s=param('strength')/100*mul, f=param('focus');
       const ox=dx*s, oy=dy*s*W/H;
       let zoom=1;
@@ -409,10 +511,11 @@ const GL = (()=>{
       gl.uniform2f(uOff,ox,oy); gl.uniform1f(uFocus,f); gl.uniform1f(uZoom,zoom);
       gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
     },
-    snapshot(dx,dy,mul=1){ this.render(dx,dy,mul); const c=mk(cv.width,cv.height); c.getContext('2d').drawImage(cv,0,0); return c; }
+    /* 渲染一个视角并复制到 target 画布 */
+    snapshot(dx,dy,target){ this.render(dx,dy); const c=target||mk(cv.width,cv.height); if(c.width!==cv.width||c.height!==cv.height){ c.width=cv.width; c.height=cv.height; } ctx2d(c).drawImage(cv,0,0); return c; }
   };
+  return api;
 })();
-function alertBox(m){ setStatus($('#exportStatus'),m,'err'); }
 
 /* ---------- 实时动画 ---------- */
 function pathAt(t, kind){
@@ -425,10 +528,12 @@ const stage=$('#stage');
 stage.addEventListener('pointermove',e=>{ const r=GL.canvas.getBoundingClientRect(); if(!r.width) return;
   S.pointer=[Math.max(-1,Math.min(1,((e.clientX-r.left)/r.width-.5)*2)), Math.max(-1,Math.min(1,((e.clientY-r.top)/r.height-.5)*2))]; });
 stage.addEventListener('pointerleave',()=>S.pointer=[0,0]);
+let gyroOn=false;
 $('#motion').onchange=async()=>{
-  if($('#motion').value==='gyro'){
+  if($('#motion').value==='gyro' && !gyroOn){
     try{ if(typeof DeviceOrientationEvent!=='undefined' && DeviceOrientationEvent.requestPermission){ const r=await DeviceOrientationEvent.requestPermission(); if(r!=='granted') throw 0; } }
-    catch{ setStatus($('#exportStatus'),'没有获得陀螺仪权限。','warn'); }
+    catch(e){ setStatus($('#exportStatus'),'没有获得陀螺仪权限。','warn'); return; }
+    gyroOn=true;
     window.addEventListener('deviceorientation',e=>{ S.gyro=[Math.max(-1,Math.min(1,(e.gamma||0)/25)), Math.max(-1,Math.min(1,((e.beta||0)-45)/25))]; });
   }
 };
@@ -436,15 +541,14 @@ $('#period').oninput=()=>$('#periodV').textContent=$('#period').value+'s';
 
 function loop(now){
   requestAnimationFrame(loop);
-  if(!S.ready || S.exporting) return;
-  const t=now/1000;
+  if(!S.ready || !S.depth || S.exporting || !GL.ok) return;
   if(S.mode==='parallax'){
     let v;
     if(S.recording){ v=pathAt((now-S.recording.t0)/1000, S.recording.kind); }
     else {
       const k=$('#motion').value;
       if(k==='pointer'||k==='gyro'){ const tg=k==='pointer'?S.pointer:S.gyro; S.smoothPtr[0]+=(-tg[0]-S.smoothPtr[0])*.12; S.smoothPtr[1]+=(-tg[1]-S.smoothPtr[1])*.12; v=S.smoothPtr; }
-      else v=pathAt(t,k);
+      else v=pathAt(now/1000,k);
     }
     GL.render(v[0],v[1]);
   } else if(S.mode==='wiggle'){
@@ -463,26 +567,30 @@ document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.opts').forEach(o=>o.classList.toggle('on',o.dataset.for===S.mode));
   refreshStatic();
 });
-function showCanvas(which){ if(!S.ready) return; GL.canvas.style.display=which==='gl'?'block':'none'; $('#out').style.display=which==='out'?'block':'none'; }
+function showCanvas(which){ GL.canvas.style.display=which==='gl'?'block':'none'; $('#out').style.display=which==='out'?'block':'none'; }
 
 let staticTimer=0;
 function refreshStatic(){
-  if(!S.ready) return;
+  if(!S.ready || !S.depth) return;
+  if(!GL.ok){ showFallback(); setStatus($('#exportStatus'),'这台设备的 WebGL 不可用，只能显示原图。请展开“诊断信息”截图给我。','err'); return; }
   if(S.mode==='parallax'||S.mode==='wiggle'){ showCanvas('gl'); return; }
   clearTimeout(staticTimer); staticTimer=setTimeout(()=>{
-    const c = S.mode==='stereo'?buildStereo() : S.mode==='magic'?buildMagic() : buildAnaglyph();
-    const o=$('#out'); o.width=c.width; o.height=c.height; o.getContext('2d').drawImage(c,0,0); showCanvas('out');
-  },60);
+    try{
+      const c = S.mode==='stereo'?buildStereo() : S.mode==='magic'?buildMagic() : buildAnaglyph();
+      const o=$('#out'); o.width=c.width; o.height=c.height; ctx2d(o).drawImage(c,0,0); free(c); showCanvas('out');
+    }catch(e){ log('❌ 生成失败:', e.message); setStatus($('#exportStatus'),'生成失败：'+e.message,'err'); }
+  },80);
 }
 ['strength','focus','meStrips','meDepth'].forEach(id=>$('#'+id).addEventListener('input',()=>{ const v=$('#'+id+'V'); if(v) v.textContent=$('#'+id).value; refreshStatic(); }));
 ['autoCrop','stereoType','stereoSwap','stereoDots','mePattern','meWidth','meInvert','meDots','anaType'].forEach(id=>$('#'+id).addEventListener('change',refreshStatic));
 $('#meRegen').onclick=()=>{ S.meSeed++; refreshStatic(); };
 
-/* ---------- 立体对 ---------- */
-function stereoViews(){ let L=GL.snapshot(.5,0), R=GL.snapshot(-.5,0); if($('#stereoSwap').checked) [L,R]=[R,L]; return [L,R]; }
+/* ---------- 立体对 / 红蓝（复用两张画布，省内存） ---------- */
+const poolL=mk(1,1), poolR=mk(1,1);
+function stereoViews(){ let L=GL.snapshot(.5,0,poolL), R=GL.snapshot(-.5,0,poolR); if($('#stereoSwap').checked) [L,R]=[R,L]; return [L,R]; }
 function buildStereo(){
   const [L,R]=stereoViews(), W=L.width, H=L.height, gap=Math.round(W*.04), top=$('#stereoDots').checked?Math.round(H*.08):gap;
-  const c=mk(W*2+gap*3, H+top+gap), x=c.getContext('2d');
+  const c=mk(W*2+gap*3, H+top+gap), x=ctx2d(c);
   x.fillStyle='#000'; x.fillRect(0,0,c.width,c.height);
   const cross=$('#stereoType').value==='cross', A=cross?R:L, B=cross?L:R;
   x.drawImage(A,gap,top); x.drawImage(B,gap*2+W,top);
@@ -490,26 +598,29 @@ function buildStereo(){
     for(const cx of [gap+W/2, gap*2+W*1.5]){ x.beginPath(); x.arc(cx,top/2,r,0,7); x.fill(); } }
   return c;
 }
-$('#stereoBtn').onclick=async()=>download(await canvasBlob(buildStereo()), `3D-${$('#stereoType').value==='cross'?'交叉眼':'平行眼'}-${stamp()}.png`);
-
-/* ---------- 红蓝 ---------- */
 function buildAnaglyph(){
-  const [L,R]=[GL.snapshot(.5,0),GL.snapshot(-.5,0)], W=L.width,H=L.height;
-  const ld=L.getContext('2d').getImageData(0,0,W,H), rd=R.getContext('2d').getImageData(0,0,W,H), a=ld.data,b=rd.data, t=$('#anaType').value;
+  const L=GL.snapshot(.5,0,poolL), R=GL.snapshot(-.5,0,poolR), W=L.width,H=L.height;
+  const ld=ctx2d(L).getImageData(0,0,W,H), rd=ctx2d(R).getImageData(0,0,W,H), a=ld.data,b=rd.data, t=$('#anaType').value;
   for(let i=0;i<a.length;i+=4){
     const lg=a[i]*.299+a[i+1]*.587+a[i+2]*.114;
     if(t==='gray'){ const rg=b[i]*.299+b[i+1]*.587+b[i+2]*.114; a[i]=lg; a[i+1]=rg; a[i+2]=rg; }
     else if(t==='half'){ a[i]=lg; a[i+1]=b[i+1]; a[i+2]=b[i+2]; }
     else { a[i+1]=b[i+1]; a[i+2]=b[i+2]; }
   }
-  L.getContext('2d').putImageData(ld,0,0); return L;
+  const c=mk(W,H); ctx2d(c).putImageData(ld,0,0); return c;
 }
-$('#anaBtn').onclick=async()=>download(await canvasBlob(buildAnaglyph()), `3D-红蓝-${stamp()}.png`);
+async function exportPng(builder, name){
+  try{ const c=builder(); const b=await canvasBlob(c); free(c); download(b,name); }
+  catch(e){ log('❌ 导出失败:', e.message); setStatus($('#exportStatus'),'导出失败：'+e.message,'err'); }
+}
+$('#stereoBtn').onclick=()=>exportPng(buildStereo, `3D-${$('#stereoType').value==='cross'?'交叉眼':'平行眼'}-${stamp()}.png`);
+$('#anaBtn').onclick=()=>exportPng(buildAnaglyph, `3D-红蓝-${stamp()}.png`);
 
 /* ---------- 隐藏立体图 (SIRDS) ---------- */
 function rng(seed){ let s=seed>>>0||1; return ()=>((s=Math.imul(s^(s>>>15),1|s)+0x6D2B79F5|0, (s>>>0)/4294967296)); }
+function hsl(h,s,l){ h/=360; const f=n=>{ const k=(n+h*12)%12, a=s*Math.min(l,1-l); return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))); }; return [f(0),f(8),f(4)]; }
 function makePattern(type,P){
-  const c=mk(P,P), x=c.getContext('2d'), r=rng(S.meSeed*9973+P);
+  const c=mk(P,P), x=ctx2d(c), r=rng(S.meSeed*9973+P);
   if(type==='photo'){
     const cw=Math.min(S.W,S.H)*.35, sx=r()*(S.W-cw), sy=r()*(S.H-cw);
     x.drawImage(S.src,sx,sy,cw,cw,0,0,P,P);
@@ -529,18 +640,16 @@ function makePattern(type,P){
   }
   x.putImageData(id,0,0); return c;
 }
-function hsl(h,s,l){ h/=360; const f=n=>{ const k=(n+h*12)%12, a=s*Math.min(l,1-l); return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))); }; return [f(0),f(8),f(4)]; }
 function buildMagic(){
   const W=Math.min(+$('#meWidth').value, Math.max(S.W,800)), H=Math.round(W*S.H/S.W);
   const P=Math.round(W/param('meStrips')), maxShift=P*param('meDepth');
-  const dc=mk(W,H), dx=dc.getContext('2d'); dx.filter=`blur(${W/400}px)`; dx.drawImage(S.depth,0,0,W,H);
-  const dd=dx.getImageData(0,0,W,H).data;
-  const pat=makePattern($('#mePattern').value,P), pd=pat.getContext('2d').getImageData(0,0,P,P).data;
+  const dc=grayBlur(S.depth, W, H, W/400), dd=ctx2d(dc).getImageData(0,0,W,H).data; free(dc);
+  const pat=makePattern($('#mePattern').value,P), pd=ctx2d(pat).getImageData(0,0,P,P).data; free(pat);
   const top=$('#meDots').checked?Math.round(P*.45):0;
-  const out=mk(W,H+top), ox=out.getContext('2d'), od=ox.createImageData(W,H), o=od.data;
+  const out=mk(W,H+top), ox=ctx2d(out), od=ox.createImageData(W,H), o=od.data;
   const inv=$('#meInvert').checked, same=new Int32Array(W), z=new Float32Array(W);
   for(let y=0;y<H;y++){
-    for(let x=0;x<W;x++){ let v=dd[(y*W+x)*4]/255; z[x]=inv?1-v:v; same[x]=x; }
+    for(let x=0;x<W;x++){ const v=dd[(y*W+x)*4]/255; z[x]=inv?1-v:v; same[x]=x; }
     for(let x=0;x<W;x++){
       const s=Math.round(P-z[x]*maxShift); let left=x-(s>>1), right=left+s;
       if(left>=0 && right<W){
@@ -557,24 +666,24 @@ function buildMagic(){
   if(top){ ox.fillStyle='#111'; const r=top*.22; for(const cx of [W/2-P/2, W/2+P/2]){ ox.beginPath(); ox.arc(cx,top/2,r,0,7); ox.fill(); } }
   return out;
 }
-$('#meBtn').onclick=async()=>download(await canvasBlob(buildMagic()), `3D-隐藏立体图-${stamp()}.png`);
+$('#meBtn').onclick=()=>exportPng(buildMagic, `3D-隐藏立体图-${stamp()}.png`);
 
 /* ---------- GIF 导出 ---------- */
 async function exportGif(frames, delay, name, maxW=640){
-  if(S.exporting) return; S.exporting=true; const st=$('#exportStatus');
+  if(S.exporting||!GL.ok) return; S.exporting=true; const st=$('#exportStatus');
   try{
     setStatus(st,'正在生成 GIF…'); overlay('正在生成 GIF…');
     const {GIFEncoder, quantize, applyPalette}=await import(GIFENC);
-    const sc=Math.min(1,maxW/S.W), w=Math.round(S.W*sc), h=Math.round(S.H*sc), c=mk(w,h), x=c.getContext('2d',{willReadFrequently:true});
+    const sc=Math.min(1,maxW/S.W), w=Math.round(S.W*sc), h=Math.round(S.H*sc), c=mk(w,h), x=ctx2d(c);
     const gif=GIFEncoder();
     for(let i=0;i<frames.length;i++){
       GL.render(frames[i][0],frames[i][1]); x.drawImage(GL.canvas,0,0,w,h);
       const {data}=x.getImageData(0,0,w,h), pal=quantize(data,256), idx=applyPalette(data,pal);
       gif.writeFrame(idx,w,h,{palette:pal,delay}); overlay(`正在生成 GIF… ${i+1}/${frames.length}`); await tick();
     }
-    gif.finish(); download(new Blob([gif.bytes()],{type:'image/gif'}), name);
-    setStatus(st,`GIF 已导出（${w}×${h}，${frames.length} 帧）。`,'ok');
-  }catch(e){ console.error(e); setStatus(st,'GIF 导出失败：'+e.message,'err'); }
+    gif.finish(); free(c); download(new Blob([gif.bytes()],{type:'image/gif'}), name);
+    if(!IS_IOS) setStatus(st,`GIF 已导出（${w}×${h}，${frames.length} 帧）。`,'ok');
+  }catch(e){ log('❌ GIF 失败:', e.message); setStatus(st,'GIF 导出失败：'+e.message,'err'); }
   finally{ S.exporting=false; overlay(); }
 }
 $('#gifBtn').onclick=()=>{
@@ -585,21 +694,22 @@ $('#wigGifBtn').onclick=()=>exportGif(wiggleSeq().map(v=>[v,0]), param('wigSpeed
 
 /* ---------- 视频导出 ---------- */
 $('#vidBtn').onclick=()=>{
-  if(S.recording) return; const st=$('#exportStatus');
-  if(!GL.canvas.captureStream || typeof MediaRecorder==='undefined'){ setStatus(st,'这个浏览器不支持录制视频，请用 Chrome / Edge，或导出 GIF。','err'); return; }
+  if(S.recording||!GL.ok) return; const st=$('#exportStatus');
+  if(!GL.canvas.captureStream || typeof MediaRecorder==='undefined'){ setStatus(st,'这个浏览器不支持录制视频，请导出 GIF。','err'); return; }
   const types=['video/mp4;codecs=avc1.640028','video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'];
   const mime=types.find(t=>MediaRecorder.isTypeSupported(t))||''; const ext=mime.includes('mp4')?'mp4':'webm';
   let kind=$('#motion').value; if(kind==='pointer'||kind==='gyro') kind='circle';
   const dur=param('period')*(+$('#vidLoops').value);
   const stream=GL.canvas.captureStream(30), rec=new MediaRecorder(stream, mime?{mimeType:mime, videoBitsPerSecond:12e6}:{});
   const chunks=[]; rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
-  rec.onstop=()=>{ S.recording=null; $('#vidBtn').disabled=false; download(new Blob(chunks,{type:mime||'video/webm'}), `3D动态照片-${stamp()}.${ext}`); setStatus(st,`视频已导出（${ext.toUpperCase()}，${dur.toFixed(1)} 秒）。`,'ok'); };
+  rec.onstop=()=>{ S.recording=null; $('#vidBtn').disabled=false; download(new Blob(chunks,{type:mime||'video/webm'}), `3D动态照片-${stamp()}.${ext}`); if(!IS_IOS) setStatus(st,`视频已导出（${ext.toUpperCase()}，${dur.toFixed(1)} 秒）。`,'ok'); };
   S.recording={t0:performance.now(), kind}; $('#vidBtn').disabled=true; rec.start(250);
   const t0=performance.now(); const iv=setInterval(()=>{ const p=(performance.now()-t0)/1000; setStatus(st,`正在录制视频… ${p.toFixed(1)} / ${dur.toFixed(1)} 秒（请保持页面在前台）`); if(p>=dur){ clearInterval(iv); rec.stop(); } },200);
 };
 
-/* 尺寸变更后重新载入 */
 $('#maxSize').onchange=()=>{ if(S.src) setStatus($('#depthStatus'),'处理尺寸对下一张图片生效。','warn'); };
+log('页面初始化完成');
 </script>
+
 </body>
 </html>

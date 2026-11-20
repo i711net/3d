@@ -169,6 +169,39 @@ footer{color:var(--mute);text-align:center;font-size:12px;padding:20px}
     </div>
 
     <div class="opts" data-for="magic">
+      <div class="row"><label>隐藏内容</label>
+        <select id="meSrc"><option value="photo">上传的照片</option><option value="text">文字 / 数字 / 符号</option><option value="shape">动物简笔图</option></select></div>
+      <div id="meTextBox" style="display:none">
+        <div class="row"><label>输入内容</label><textarea id="meText" rows="2" style="flex:1;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:16px;resize:vertical">3D</textarea></div>
+        <div class="row" id="meSymbols"><label>常用符号</label></div>
+        <p class="hint">可以输入中文、英文、数字、符号和表情。换行就是多行。字越粗、越大越容易看出来，建议每行不超过 4 个字。</p>
+      </div>
+      <div id="meShapeBox" style="display:none">
+        <div class="row"><label>选择图案</label>
+          <select id="meShape">
+            <optgroup label="分层简笔图（头部更凸出）">
+              <option value="cat">🐱 小猫</option><option value="rabbit">🐰 兔子</option><option value="dog">🐶 小狗</option><option value="fish">🐟 鱼</option>
+              <option value="bird">🐦 小鸟</option><option value="butterfly">🦋 蝴蝶</option><option value="turtle">🐢 乌龟</option><option value="elephant">🐘 大象</option>
+            </optgroup>
+            <optgroup label="表情轮廓（随手机字体）">
+              <option value="e:🐼">🐼 熊猫</option><option value="e:🐬">🐬 海豚</option><option value="e:🦒">🦒 长颈鹿</option><option value="e:🐧">🐧 企鹅</option>
+              <option value="e:🦖">🦖 恐龙</option><option value="e:🐎">🐎 马</option><option value="e:🦅">🦅 老鹰</option><option value="e:🐙">🐙 章鱼</option>
+              <option value="e:🦀">🦀 螃蟹</option><option value="e:🐿️">🐿️ 松鼠</option><option value="e:🦌">🦌 鹿</option><option value="e:🐉">🐉 龙</option>
+            </optgroup>
+          </select>
+          <label style="min-width:auto">数量</label><select id="meCount"><option value="1">1 个</option><option value="2">2 个</option><option value="3">3 个</option></select>
+        </div>
+      </div>
+      <div id="meGenBox" style="display:none">
+        <div class="row"><label>画面比例</label>
+          <select id="meAspect"><option value="4:3">4:3 横图</option><option value="16:9">16:9 宽屏</option><option value="1:1">1:1 方图</option><option value="9:16">9:16 手机壁纸</option><option value="3:4">3:4 竖图</option></select>
+          <label style="min-width:auto">立体样式</label>
+          <select id="meStyle"><option value="round">圆润凸起</option><option value="flat">平面浮起</option></select>
+        </div>
+        <div class="row"><label>物体颜色</label><input type="color" id="meObjColor" value="#ff5a7a" style="width:46px;height:32px;border:none;background:none;padding:0">
+          <label class="chk"><input type="checkbox" id="meRainbow">彩虹渐变</label>
+          <span class="hint" style="margin:0">（在下方“物体上色”里开启）</span></div>
+      </div>
       <div class="row"><label>花纹</label>
         <select id="mePattern"><option value="dots">彩色随机点</option><option value="photo">照片纹理</option><option value="wave">彩虹波纹</option><option value="mono">黑白噪点</option></select>
         <label style="min-width:auto">输出宽度</label>
@@ -177,7 +210,7 @@ footer{color:var(--mute);text-align:center;font-size:12px;padding:20px}
       <div class="row"><label>条带数</label><input type="range" id="meStrips" min="5" max="14" step="1" value="8"><span class="val" id="meStripsV">8</span></div>
       <div class="row"><label>凸起强度</label><input type="range" id="meDepth" min="0.08" max="0.45" step="0.01" value="0.28"><span class="val" id="meDepthV">0.28</span></div>
       <div class="row"><label>物体上色</label>
-        <select id="meColor"><option value="object" selected>只给立体物体上色</option><option value="all">整张按照片上色</option><option value="none">不上色（经典）</option></select></div>
+        <select id="meColor"><option value="none" selected>不上色（经典）</option><option value="object">只给立体物体上色</option><option value="all">整张上色</option></select></div>
       <div class="row"><label>上色强度</label><input type="range" id="meColorAmt" min="0.1" max="1" step="0.05" value="0.75"><span class="val" id="meColorAmtV">0.75</span></div>
       <div class="row"><label>物体范围</label><input type="range" id="meColorTh" min="0" max="0.9" step="0.01" value="0.45"><span class="val" id="meColorThV">0.45</span></div>
       <div class="row"><label class="chk"><input type="checkbox" id="meInvert">凹凸反转（交叉眼用）</label>
@@ -568,6 +601,8 @@ $('#wigSpeed').oninput=()=>$('#wigSpeedV').textContent=$('#wigSpeed').value+'ms'
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));
   S.mode=b.dataset.mode;
+  if(S.mode==='magic' && !S.ready && $('#meSrc').value==='photo'){ $('#meSrc').value='text'; syncMeSrc(); }
+  if(S.mode!=='magic' && !S.ready){ showCanvas('none'); $('#empty').style.display='block'; }
   document.querySelectorAll('.opts').forEach(o=>o.classList.toggle('on',o.dataset.for===S.mode));
   refreshStatic();
 });
@@ -575,18 +610,21 @@ function showCanvas(which){ GL.canvas.style.display=which==='gl'?'block':'none';
 
 let staticTimer=0;
 function refreshStatic(){
-  if(!S.ready || !S.depth) return;
-  if(!GL.ok){ showFallback(); setStatus($('#exportStatus'),'这台设备的 WebGL 不可用，只能显示原图。请展开“诊断信息”截图给我。','err'); return; }
+  const gen = S.mode==='magic' && $('#meSrc').value!=='photo';
+  if(!gen && (!S.ready || !S.depth)){ if(S.mode==='magic'){ showCanvas('none'); $('#empty').style.display='block'; } return; }
+  $('#empty').style.display='none';
+  if(!gen && !GL.ok){ showFallback(); setStatus($('#exportStatus'),'这台设备的 WebGL 不可用，只能显示原图。请展开“诊断信息”截图给我。','err'); return; }
   if(S.mode==='parallax'||S.mode==='wiggle'){ showCanvas('gl'); return; }
   clearTimeout(staticTimer); staticTimer=setTimeout(()=>{
     try{
       const c = S.mode==='stereo'?buildStereo() : S.mode==='magic'?buildMagic() : buildAnaglyph();
+      if(!c) return;
       const o=$('#out'); o.width=c.width; o.height=c.height; ctx2d(o).drawImage(c,0,0); free(c); showCanvas('out');
     }catch(e){ log('❌ 生成失败:', e.message); setStatus($('#exportStatus'),'生成失败：'+e.message,'err'); }
   },80);
 }
-['strength','focus','meStrips','meDepth','meColorAmt','meColorTh'].forEach(id=>$('#'+id).addEventListener('input',()=>{ const v=$('#'+id+'V'); if(v) v.textContent=$('#'+id).value; refreshStatic(); }));
-['autoCrop','stereoType','stereoSwap','stereoDots','mePattern','meWidth','meInvert','meDots','anaType','meColor'].forEach(id=>$('#'+id).addEventListener('change',refreshStatic));
+['strength','focus','meStrips','meDepth','meColorAmt','meColorTh','meText','meObjColor'].forEach(id=>$('#'+id).addEventListener('input',()=>{ const v=$('#'+id+'V'); if(v) v.textContent=$('#'+id).value; refreshStatic(); }));
+['autoCrop','stereoType','stereoSwap','stereoDots','mePattern','meWidth','meInvert','meDots','anaType','meColor','meSrc','meShape','meCount','meAspect','meStyle','meObjColor','meRainbow'].forEach(id=>$('#'+id).addEventListener('change',refreshStatic));
 $('#meRegen').onclick=()=>{ S.meSeed++; refreshStatic(); };
 
 /* ---------- 立体对 / 红蓝（复用两张画布，省内存） ---------- */
@@ -625,6 +663,7 @@ function rng(seed){ let s=seed>>>0||1; return ()=>((s=Math.imul(s^(s>>>15),1|s)+
 function hsl(h,s,l){ h/=360; const f=n=>{ const k=(n+h*12)%12, a=s*Math.min(l,1-l); return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))); }; return [f(0),f(8),f(4)]; }
 function makePattern(type,P){
   const c=mk(P,P), x=ctx2d(c), r=rng(S.meSeed*9973+P);
+  if(type==='photo' && !S.src) type='dots';
   if(type==='photo'){
     const cw=Math.min(S.W,S.H)*.35, sx=r()*(S.W-cw), sy=r()*(S.H-cw);
     x.drawImage(S.src,sx,sy,cw,cw,0,0,P,P);
@@ -644,19 +683,125 @@ function makePattern(type,P){
   }
   x.putImageData(id,0,0); return c;
 }
+
+/* ---------- 隐藏立体图：文字 / 符号 / 动物简笔图 ---------- */
+const SYMBOLS=['❤','★','☺','♪','☯','✈','∞','✿','☂','⚡','☀','☁','♛','✔','?','!','520','1314','LOVE','福'];
+SYMBOLS.forEach(t=>{ const b=document.createElement('button'); b.textContent=t; b.style.padding='4px 9px';
+  b.onclick=()=>{ $('#meText').value=t; refreshStatic(); }; $('#meSymbols').appendChild(b); });
+function syncMeSrc(){ const v=$('#meSrc').value;
+  $('#meTextBox').style.display=v==='text'?'block':'none';
+  $('#meShapeBox').style.display=v==='shape'?'block':'none';
+  $('#meGenBox').style.display=v==='photo'?'none':'block';
+  if(v!=='photo' && $('#mePattern').value==='photo' && !S.src) $('#mePattern').value='dots';
+}
+$('#meSrc').addEventListener('change',syncMeSrc);
+$('#meBtn').disabled=false;
+const FONT='"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Apple Color Emoji","Segoe UI Emoji",sans-serif';
+
+/* 动物简笔图：坐标都在 100×100 的格子里，lv 是凸起高度（越大越近） */
+function drawAnimal(x,name){
+  const L=v=>{ const g=Math.round(v*255); x.fillStyle=x.strokeStyle=`rgb(${g},${g},${g})`; };
+  const E=(cx,cy,rx,ry,r=0)=>{ x.beginPath(); x.ellipse(cx,cy,rx,ry,r,0,Math.PI*2); x.fill(); };
+  const T=(...p)=>{ x.beginPath(); x.moveTo(p[0],p[1]); for(let i=2;i<p.length;i+=2) x.lineTo(p[i],p[i+1]); x.closePath(); x.fill(); };
+  const S_=(w,...p)=>{ x.lineWidth=w; x.lineCap='round'; x.lineJoin='round'; x.beginPath(); x.moveTo(p[0],p[1]);
+    if(p.length===6) x.quadraticCurveTo(p[2],p[3],p[4],p[5]); else for(let i=2;i<p.length;i+=2) x.lineTo(p[i],p[i+1]); x.stroke(); };
+  switch(name){
+    case 'cat': L(.5); S_(6,72,78,92,70,88,48); L(.6); E(52,70,24,18); L(.7); E(40,86,5,6); E(62,86,5,6);
+      L(.85); E(46,40,19,17); T(30,34,30,12,44,26); T(48,26,62,12,62,34); break;
+    case 'rabbit': L(.6); E(55,72,24,19); E(78,74,6,6); L(.85); E(38,50,15,14);
+      L(.75); E(30,24,5,16,-.15); E(44,22,5,16,.15); L(.7); E(45,88,9,4); break;
+    case 'dog': L(.5); S_(5,74,62,86,48); L(.6); E(55,66,24,15); L(.65); for(const lx of [38,48,62,72]) S_(6,lx,74,lx,90);
+      L(.85); E(32,46,15,14); E(20,52,9,6); L(.75); E(26,34,5,11,.5); E(40,34,5,11,-.4); break;
+    case 'fish': L(.55); T(78,50,96,32,96,68); L(.65); T(46,32,60,18,66,36); T(48,66,58,80,64,64);
+      L(.85); E(48,50,32,19); break;
+    case 'bird': L(.55); T(18,54,4,46,6,62); L(.65); E(46,56,30,18,-.15); L(.75); T(30,52,60,30,64,58);
+      L(.85); E(72,40,13,12); L(.9); T(83,37,96,41,83,44); L(.5); S_(3,44,72,40,86); S_(3,54,72,52,86); break;
+    case 'butterfly': L(.55); E(30,34,20,17,-.5); E(70,34,20,17,.5); L(.6); E(34,66,15,13,.5); E(66,66,15,13,-.5);
+      L(.9); E(50,50,4,24); L(.8); S_(2,48,28,40,12); S_(2,52,28,60,12); break;
+    case 'turtle': L(.55); E(22,72,7,6); E(78,72,7,6); E(22,44,7,6); E(78,44,7,6); E(50,88,5,5); L(.7); E(50,22,10,10);
+      L(.9); E(50,58,30,25); break;
+    case 'elephant': L(.55); E(56,58,30,21); L(.6); for(const lx of [36,48,66,78]) S_(10,lx,70,lx,90); S_(3,86,52,94,64);
+      L(.75); E(38,38,15,18); L(.85); E(28,40,13,13); L(.8); S_(7,18,44,12,62,18,80); break;
+  }
+}
+function layoutCanvas(W,H,drawFn){ const c=mk(W,H), x=ctx2d(c); drawFn(x); return c; }
+/* 把透明底的形状变成深度：灰度×透明度；圆润样式再按边缘距离加弧度 */
+function shapeToDepth(c, useAlphaOnly){
+  const W=c.width,H=c.height, x=ctx2d(c), id=x.getImageData(0,0,W,H), d=id.data, g=new Float32Array(W*H), m=new Float32Array(W*H);
+  for(let i=0;i<W*H;i++){ const a=d[i*4+3]/255; m[i]=a; g[i]=useAlphaOnly? a : a*(d[i*4]*.299+d[i*4+1]*.587+d[i*4+2]*.114)/255; }
+  if($('#meStyle').value==='round'){
+    const r=Math.max(2,Math.round(Math.min(W,H)/45)), tmp=new Float32Array(W*H), b=m.slice();
+    for(let p=0;p<3;p++) boxPass(b,W,H,r,tmp);
+    for(let i=0;i<W*H;i++) g[i]*= m[i]>0? 0.55+0.45*Math.sqrt(Math.min(1,b[i]*1.6)) : 0;
+  }
+  for(let i=0;i<W*H;i++){ const v=Math.round(g[i]*255); d[i*4]=d[i*4+1]=d[i*4+2]=v; d[i*4+3]=255; }
+  x.putImageData(id,0,0); return c;
+}
+function magicSource(probe){
+  const kind=$('#meSrc').value;
+  if(kind==='photo'){
+    if(!S.depth) return null; if(probe) return true;
+    const W=Math.min(+$('#meWidth').value, Math.max(S.W,800)), H=Math.round(W*S.H/S.W);
+    return {W,H,depth:S.depth,color:S.src,blur:W/400};
+  }
+  if(probe) return true;
+  const [aw,ah]=$('#meAspect').value.split(':').map(Number);
+  let W=+$('#meWidth').value, H=Math.round(W*ah/aw);
+  if(H>W*1.2){ H=Math.round(W*1.4); W=Math.round(H*aw/ah); }   // 竖图别太大
+  let depth;
+  if(kind==='text'){
+    const lines=($('#meText').value.trim()||'3D').split(/\n/).map(t=>t.trim()).filter(Boolean).slice(0,4);
+    depth=layoutCanvas(W,H,x=>{
+      x.textAlign='center'; x.textBaseline='middle'; x.fillStyle='#fff';
+      x.font=`900 100px ${FONT}`; const mw=Math.max(...lines.map(t=>x.measureText(t).width));
+      const size=Math.min(H*0.78/lines.length/1.12, W*0.84/mw*100);
+      x.font=`900 ${size}px ${FONT}`;
+      lines.forEach((t,i)=>x.fillText(t, W/2, H/2+(i-(lines.length-1)/2)*size*1.12));
+    });
+    depth=shapeToDepth(depth,true);
+  } else {
+    const name=$('#meShape').value, n=+$('#meCount').value;
+    depth=layoutCanvas(W,H,x=>{
+      const cell=Math.min(W/n, H)*0.86;
+      for(let i=0;i<n;i++){
+        const cx=W*(i+.5)/n, cy=H/2 + (n>1? (i%2?1:-1)*H*0.06:0), sc=cell/100*(n>1&&i%2?0.85:1);
+        x.save(); x.translate(cx-50*sc, cy-50*sc); x.scale(sc,sc);
+        if(name.startsWith('e:')){ x.textAlign='center'; x.textBaseline='middle'; x.font=`86px ${FONT}`; x.fillStyle='#fff'; x.fillText(name.slice(2),50,54); }
+        else drawAnimal(x,name);
+        x.restore();
+      }
+    });
+    depth=shapeToDepth(depth, name.startsWith('e:'));
+  }
+  const color=layoutCanvas(W,H,x=>{
+    if($('#meRainbow').checked){ const g=x.createLinearGradient(0,0,W,H); ['#ff4d4d','#ffb347','#ffe66d','#6be585','#4dc3ff','#a77bff','#ff6ec7'].forEach((c,i,a)=>g.addColorStop(i/(a.length-1),c)); x.fillStyle=g; }
+    else x.fillStyle=$('#meObjColor').value;
+    x.fillRect(0,0,W,H);
+  });
+  return {W,H,depth,color,blur:W/700,own:true};
+}
+
 function buildMagic(){
-  const W=Math.min(+$('#meWidth').value, Math.max(S.W,800)), H=Math.round(W*S.H/S.W);
+  const src=magicSource(); if(!src) return null;
+  const {W,H}=src;
   const P=Math.round(W/param('meStrips')), maxShift=P*param('meDepth');
-  const dc=grayBlur(S.depth, W, H, W/400), dd=ctx2d(dc).getImageData(0,0,W,H).data; free(dc);
+  const dc=grayBlur(src.depth, W, H, src.blur), dd=ctx2d(dc).getImageData(0,0,W,H).data; free(dc);
+  if(src.own){ free(src.depth); }
   const pat=makePattern($('#mePattern').value,P), pd=ctx2d(pat).getImageData(0,0,P,P).data; free(pat);
   const top=$('#meDots').checked?Math.round(P*.45):0;
   const out=mk(W,H+top), ox=ctx2d(out), od=ox.createImageData(W,H), o=od.data;
   const inv=$('#meInvert').checked, same=new Int32Array(W), z=new Float32Array(W);
+  /* 物体上色：每个像素取它在左/右眼配对中所代表的那个立体表面点的颜色，对眼后两边颜色正好重合 */
+  const cm=$('#meColor').value, amt=param('meColorAmt'), th=param('meColorTh');
+  let ph=null; const tw=new Float32Array(W), tx=new Int32Array(W);
+  if(cm!=='none'){ const pc=mk(W,H), px=ctx2d(pc); px.drawImage(src.color,0,0,W,H); ph=px.getImageData(0,0,W,H).data; free(pc); }
   for(let y=0;y<H;y++){
-    for(let x=0;x<W;x++){ const v=dd[(y*W+x)*4]/255; z[x]=inv?1-v:v; same[x]=x; }
+    for(let x=0;x<W;x++){ const v=dd[(y*W+x)*4]/255; z[x]=inv?1-v:v; same[x]=x; tw[x]=0; }
     for(let x=0;x<W;x++){
       const s=Math.round(P-z[x]*maxShift); let left=x-(s>>1), right=left+s;
       if(left>=0 && right<W){
+        if(ph){ let w=amt; if(cm==='object'){ const t=(z[x]-th)/0.12; w*= t<=0?0: t>=1?1: t*t*(3-2*t); }
+          if(w>tw[left]){ tw[left]=w; tx[left]=x; } if(w>tw[right]){ tw[right]=w; tx[right]=x; } }
         for(let k=same[left]; k!==left && k!==right; k=same[left]){ if(k<right) left=k; else { left=right; right=k; } }
         same[left]=right;
       }
@@ -665,34 +810,17 @@ function buildMagic(){
       if(same[x]===x){ const pk=((y%P)*P + (x%P))*4; o[k]=pd[pk]; o[k+1]=pd[pk+1]; o[k+2]=pd[pk+2]; }
       else { const q=(y*W+same[x])*4; o[k]=o[q]; o[k+1]=o[q+1]; o[k+2]=o[q+2]; }
       o[k+3]=255; }
+    if(ph) for(let x=0;x<W;x++){ const w=tw[x]; if(w<0.002) continue;
+      const k=(y*W+x)*4, c=(y*W+tx[x])*4, m=0.35+(o[k]*.299+o[k+1]*.587+o[k+2]*.114)/255;
+      // 注意：只改颜色，明暗花纹在每个像素各自保留；配对的两个像素明暗一致（复制来的），所以仍可对焦
+      for(let j=0;j<3;j++) o[k+j]=o[k+j]*(1-w)+Math.min(255,ph[c+j]*m)*w; }
   }
-  /* 物体上色：保留花纹明暗（用于对焦），颜色取自照片中该像素对应的立体表面位置 */
-  const cm=$('#meColor').value;
-  if(cm!=='none'){
-    const sm=Math.max(2,Math.round(W/160)), sw=Math.max(8,Math.round(W/sm)), sh=Math.max(8,Math.round(H/sm));
-    const ps=mk(sw,sh); ctx2d(ps).drawImage(S.src,0,0,sw,sh);   // 先缩小再放大 = 柔化颜色，减少左右眼重影
-    const pc=mk(W,H), px=ctx2d(pc); px.imageSmoothingQuality='high'; px.drawImage(ps,0,0,W,H); free(ps);
-    const ph=px.getImageData(0,0,W,H).data; free(pc);
-    const amt=param('meColorAmt'), th=param('meColorTh');
-    const zAt=i=>{ const v=dd[i*4]/255; return inv?1-v:v; };
-    for(let y=0;y<H;y++){ const row=y*W;
-      for(let x=0;x<W;x++){
-        const sep=P-zAt(row+x)*maxShift;
-        const xa=Math.min(W-1,Math.round(x+sep/2)), xb=Math.max(0,Math.round(x-sep/2));
-        let w=amt;
-        if(cm==='object'){ const t=(Math.min(zAt(row+xa),zAt(row+xb))-th)/0.12; w*= t<=0?0: t>=1?1: t*t*(3-2*t); }
-        if(w<0.002) continue;
-        const k=(row+x)*4, a=(row+xa)*4, b=(row+xb)*4;
-        const m=0.35+(o[k]*.299+o[k+1]*.587+o[k+2]*.114)/255;
-        for(let c=0;c<3;c++){ const col=Math.min(255,(ph[a+c]+ph[b+c])*0.5*m); o[k+c]=o[k+c]*(1-w)+col*w; }
-      }
-    }
-  }
+  if(src.own) free(src.color);
   ox.fillStyle='#fff'; ox.fillRect(0,0,W,top); ox.putImageData(od,0,top);
   if(top){ ox.fillStyle='#111'; const r=top*.22; for(const cx of [W/2-P/2, W/2+P/2]){ ox.beginPath(); ox.arc(cx,top/2,r,0,7); ox.fill(); } }
   return out;
 }
-$('#meBtn').onclick=()=>exportPng(buildMagic, `3D-隐藏立体图-${stamp()}.png`);
+$('#meBtn').onclick=()=>{ if(!magicSource(true)){ setStatus($('#exportStatus'),'请先上传照片，或把“隐藏内容”改成文字/简笔图。','warn'); return; } exportPng(buildMagic, `3D-隐藏立体图-${stamp()}.png`); };
 
 /* ---------- GIF 导出 ---------- */
 async function exportGif(frames, delay, name, maxW=640){

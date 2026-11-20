@@ -176,11 +176,15 @@ footer{color:var(--mute);text-align:center;font-size:12px;padding:20px}
       </div>
       <div class="row"><label>条带数</label><input type="range" id="meStrips" min="5" max="14" step="1" value="8"><span class="val" id="meStripsV">8</span></div>
       <div class="row"><label>凸起强度</label><input type="range" id="meDepth" min="0.08" max="0.45" step="0.01" value="0.28"><span class="val" id="meDepthV">0.28</span></div>
+      <div class="row"><label>物体上色</label>
+        <select id="meColor"><option value="object" selected>只给立体物体上色</option><option value="all">整张按照片上色</option><option value="none">不上色（经典）</option></select></div>
+      <div class="row"><label>上色强度</label><input type="range" id="meColorAmt" min="0.1" max="1" step="0.05" value="0.75"><span class="val" id="meColorAmtV">0.75</span></div>
+      <div class="row"><label>物体范围</label><input type="range" id="meColorTh" min="0" max="0.9" step="0.01" value="0.45"><span class="val" id="meColorThV">0.45</span></div>
       <div class="row"><label class="chk"><input type="checkbox" id="meInvert">凹凸反转（交叉眼用）</label>
         <label class="chk"><input type="checkbox" id="meDots" checked>显示对齐点</label>
         <button id="meRegen">换一组花纹</button></div>
       <div class="row"><button class="primary" id="meBtn" disabled>下载 PNG</button></div>
-      <div class="guide">经典的“Magic Eye 隐藏立体图”：看起来是一片花纹，用<b>平行眼</b>（盯着屏幕后方）看，上方两个圆点变成三个时，照片的立体轮廓就会浮出来。细节会丢失，<b>轮廓清楚的主体（人、动物、物体）效果最好</b>。</div>
+      <div class="guide">经典的“Magic Eye 隐藏立体图”：看起来是一片花纹，用<b>平行眼</b>（盯着屏幕后方）看，上方两个圆点变成三个时，照片的立体轮廓就会浮出来。细节会丢失，<b>轮廓清楚的主体（人、动物、物体）效果最好</b>。<br><b>物体上色：</b>立体物体会带上照片里的颜色。代价是不用对眼也能隐约看出物体轮廓；颜色太浓会稍微难对焦，可以降低“上色强度”。“物体范围”越小，上色的区域越大。</div>
     </div>
 
     <div class="opts" data-for="anaglyph">
@@ -581,8 +585,8 @@ function refreshStatic(){
     }catch(e){ log('❌ 生成失败:', e.message); setStatus($('#exportStatus'),'生成失败：'+e.message,'err'); }
   },80);
 }
-['strength','focus','meStrips','meDepth'].forEach(id=>$('#'+id).addEventListener('input',()=>{ const v=$('#'+id+'V'); if(v) v.textContent=$('#'+id).value; refreshStatic(); }));
-['autoCrop','stereoType','stereoSwap','stereoDots','mePattern','meWidth','meInvert','meDots','anaType'].forEach(id=>$('#'+id).addEventListener('change',refreshStatic));
+['strength','focus','meStrips','meDepth','meColorAmt','meColorTh'].forEach(id=>$('#'+id).addEventListener('input',()=>{ const v=$('#'+id+'V'); if(v) v.textContent=$('#'+id).value; refreshStatic(); }));
+['autoCrop','stereoType','stereoSwap','stereoDots','mePattern','meWidth','meInvert','meDots','anaType','meColor'].forEach(id=>$('#'+id).addEventListener('change',refreshStatic));
 $('#meRegen').onclick=()=>{ S.meSeed++; refreshStatic(); };
 
 /* ---------- 立体对 / 红蓝（复用两张画布，省内存） ---------- */
@@ -661,6 +665,28 @@ function buildMagic(){
       if(same[x]===x){ const pk=((y%P)*P + (x%P))*4; o[k]=pd[pk]; o[k+1]=pd[pk+1]; o[k+2]=pd[pk+2]; }
       else { const q=(y*W+same[x])*4; o[k]=o[q]; o[k+1]=o[q+1]; o[k+2]=o[q+2]; }
       o[k+3]=255; }
+  }
+  /* 物体上色：保留花纹明暗（用于对焦），颜色取自照片中该像素对应的立体表面位置 */
+  const cm=$('#meColor').value;
+  if(cm!=='none'){
+    const sm=Math.max(2,Math.round(W/160)), sw=Math.max(8,Math.round(W/sm)), sh=Math.max(8,Math.round(H/sm));
+    const ps=mk(sw,sh); ctx2d(ps).drawImage(S.src,0,0,sw,sh);   // 先缩小再放大 = 柔化颜色，减少左右眼重影
+    const pc=mk(W,H), px=ctx2d(pc); px.imageSmoothingQuality='high'; px.drawImage(ps,0,0,W,H); free(ps);
+    const ph=px.getImageData(0,0,W,H).data; free(pc);
+    const amt=param('meColorAmt'), th=param('meColorTh');
+    const zAt=i=>{ const v=dd[i*4]/255; return inv?1-v:v; };
+    for(let y=0;y<H;y++){ const row=y*W;
+      for(let x=0;x<W;x++){
+        const sep=P-zAt(row+x)*maxShift;
+        const xa=Math.min(W-1,Math.round(x+sep/2)), xb=Math.max(0,Math.round(x-sep/2));
+        let w=amt;
+        if(cm==='object'){ const t=(Math.min(zAt(row+xa),zAt(row+xb))-th)/0.12; w*= t<=0?0: t>=1?1: t*t*(3-2*t); }
+        if(w<0.002) continue;
+        const k=(row+x)*4, a=(row+xa)*4, b=(row+xb)*4;
+        const m=0.35+(o[k]*.299+o[k+1]*.587+o[k+2]*.114)/255;
+        for(let c=0;c<3;c++){ const col=Math.min(255,(ph[a+c]+ph[b+c])*0.5*m); o[k+c]=o[k+c]*(1-w)+col*w; }
+      }
+    }
   }
   ox.fillStyle='#fff'; ox.fillRect(0,0,W,top); ox.putImageData(od,0,top);
   if(top){ ox.fillStyle='#111'; const r=top*.22; for(const cx of [W/2-P/2, W/2+P/2]){ ox.beginPath(); ox.arc(cx,top/2,r,0,7); ox.fill(); } }
